@@ -1,18 +1,21 @@
 require('dotenv').config();
 const { createClient } = require('@libsql/client');
 
-// Ambil variable dan bersihkan dari spasi/enter
-const dbUrl = process.env.TURSO_DATABASE_URL ? process.env.TURSO_DATABASE_URL.trim() : '';
-const authToken = process.env.TURSO_AUTH_TOKEN ? process.env.TURSO_AUTH_TOKEN.trim() : '';
+// Sanitasi & pembersihan spasi/enter
+let dbUrl = process.env.TURSO_DATABASE_URL ? process.env.TURSO_DATABASE_URL.trim() : '';
+let authToken = process.env.TURSO_AUTH_TOKEN ? process.env.TURSO_AUTH_TOKEN.trim() : '';
 
-// Validasi keberadaan kredensial Turso
+// Otomatis ubah https:// menjadi libsql:// jika salah ketik
+if (dbUrl.startsWith('https://')) {
+  dbUrl = dbUrl.replace('https://', 'libsql://');
+}
+
 const isTursoConfigured = dbUrl.length > 0 && authToken.length > 0;
 
 if (!isTursoConfigured) {
-  console.warn('⚠️ WARN: TURSO_DATABASE_URL atau TURSO_AUTH_TOKEN belum terpasang dengan benar di Render. Menggunakan database lokal sementara.');
+  console.warn('⚠️ WARN: TURSO_DATABASE_URL atau TURSO_AUTH_TOKEN belum terpasang dengan benar!');
 }
 
-// Inisialisasi Turso Client dengan Opsi Aman
 const turso = createClient({
   url: isTursoConfigured ? dbUrl : 'file:scheduler.db',
   authToken: isTursoConfigured ? authToken : undefined
@@ -20,7 +23,6 @@ const turso = createClient({
 
 async function initDb() {
   try {
-    // 1. Tabel Users
     await turso.execute(`
       CREATE TABLE IF NOT EXISTS users (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -34,7 +36,6 @@ async function initDb() {
       )
     `);
 
-    // 2. Tabel Channels
     await turso.execute(`
       CREATE TABLE IF NOT EXISTS channels (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -47,7 +48,6 @@ async function initDb() {
       )
     `);
 
-    // 3. Tabel Schedules (Antrean Video)
     await turso.execute(`
       CREATE TABLE IF NOT EXISTS schedules (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -67,7 +67,7 @@ async function initDb() {
       )
     `);
 
-    console.log('✅ Semua tabel (users, channels, schedules) berhasil dibuat/diverifikasi di Turso Cloud!');
+    console.log('✅ Semua tabel berhasil diinisialisasi di Turso Cloud!');
     return true;
   } catch (err) {
     console.error('❌ Gagal membuat tabel di Turso:', err.message || err);
@@ -75,7 +75,6 @@ async function initDb() {
   }
 }
 
-// Jalankan pembuatan tabel saat file dimuat
 initDb();
 
 module.exports = { turso, initDb };
