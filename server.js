@@ -5,7 +5,7 @@ const bcrypt = require('bcryptjs');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
-const db = require('./database');
+const { turso: db, initDb } = require('./database');
 const { getAuthUrl, handleCallback } = require('./youtubeService');
 const initScheduler = require('./scheduler');
 
@@ -395,10 +395,14 @@ app.delete('/api/admin/users/:id', requireAdmin, async (req, res) => {
 
 // --- WORKER & SERVER INIT ---
 
-// Jalankan Worker Scheduler
-initScheduler();
+// Inisialisasi Database Turso dan Server secara berurutan
+async function startServer() {
+  await initDb();
+  initScheduler();
 
-// Start Express Server
-app.listen(PORT, () => {
-  console.log(`Server berjalan di http://localhost:${PORT}`);
-});
+  app.listen(PORT, () => {
+    console.log(`Server berjalan di http://localhost:${PORT}`);
+  });
+}
+
+startServer();
