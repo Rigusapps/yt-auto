@@ -1,18 +1,16 @@
 require('dotenv').config();
 const { createClient } = require('@libsql/client');
 
-// Sanitasi URL & Token dari spasi / karakter tersembunyi
 let dbUrl = process.env.TURSO_DATABASE_URL ? process.env.TURSO_DATABASE_URL.trim() : '';
 let authToken = process.env.TURSO_AUTH_TOKEN ? process.env.TURSO_AUTH_TOKEN.trim() : '';
 
-// Paksa protokol menggunakan libsql://
+// Koreksi otomatis jika protokol diawali https://
 if (dbUrl.startsWith('https://')) {
   dbUrl = dbUrl.replace('https://', 'libsql://');
 } else if (dbUrl.startsWith('http://')) {
   dbUrl = dbUrl.replace('http://', 'libsql://');
 }
 
-// Inisialisasi Turso Client
 const turso = createClient({
   url: dbUrl || 'file:scheduler.db',
   authToken: authToken || undefined,
@@ -20,7 +18,7 @@ const turso = createClient({
 
 async function initDb() {
   try {
-    // Tabel Users
+    // 1. Tabel Users
     await turso.execute(`
       CREATE TABLE IF NOT EXISTS users (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -34,7 +32,7 @@ async function initDb() {
       )
     `);
 
-    // Tabel Channels
+    // 2. Tabel Channels
     await turso.execute(`
       CREATE TABLE IF NOT EXISTS channels (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -47,7 +45,7 @@ async function initDb() {
       )
     `);
 
-    // Tabel Schedules
+    // 3. Tabel Schedules
     await turso.execute(`
       CREATE TABLE IF NOT EXISTS schedules (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -67,12 +65,12 @@ async function initDb() {
       )
     `);
 
-    console.log('✅ Inisialisasi tabel Turso Cloud berhasil!');
+    console.log('✅ Semua tabel (users, channels, schedules) siap di Turso Cloud!');
+    return true;
   } catch (err) {
-    console.error('❌ Error initDb:', err.message || err);
+    console.error('❌ Gagal inisialisasi tabel:', err.message || err);
+    return false;
   }
 }
 
-initDb();
-
-module.exports = turso;
+module.exports = { turso, initDb };
