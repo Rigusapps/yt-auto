@@ -5,67 +5,62 @@ const { uploadVideoToYouTube } = require('./youtubeService');
 const fs = require('fs');
 
 function initScheduler() {
+  // Cron expression '* * * * *' = Berjalan otomatis setiap 1 menit
   cron.schedule('* * * * *', async () => {
-    try {
-      const nowIso = new Date().toISOString();
+    console.log('[Scheduler] Mengecek antrean video...');
 
-      // Query antrean video
-      const pendingItemsRes = await db.execute({
-        sql: `
-          SELECT * FROM schedules 
-          WHERE status = 'Pending' AND scheduled_time <= ?
-          ORDER BY scheduled_time ASC
-        `,
-        args: [nowIso]
-      });
+    // Ambil angka timestamp PC saat ini dalam milidetik (Waktu Lokal PC)
+    const nowTimestamp = Date.now();
 
-      const pendingItems = pendingItemsRes.rows;
-      if (!pendingItems || pendingItems.length === 0) return;
+    // Ambil item Pending yang jadwalnya (timestamp) <= timestamp PC saat ini
+    const pendingItems = db.prepare(`
+      SELECT * FROM queue 
+      WHERE status = 'Pending' AND scheduled_at <= ?
+      ORDER BY scheduled_at ASC
+    `).all(nowTimestamp);
 
-      for (const item of pendingItems) {
-        try {
-          if (!item.channel_id) {
-            throw new Error('Video tidak memiliki channel_id tujuan yang valid.');
-          }
+    if (pendingItems.length === 0) {
+      return;
+    }
 
-          console.log(`[Scheduler] Memproses upload ID: ${item.id} - "${item.title}"`);
-
-          // 1. Ubah status menjadi 'Processing'
-          await db.execute({
-            sql: "UPDATE schedules SET status = 'Processing' WHERE id = ?",
-            args: [item.id]
-          });
-
-          // 2. Upload ke YouTube
-          const result = await uploadVideoToYouTube(item);
-
-          // 3. Update status ke 'Completed'
-          await db.execute({
-            sql: "UPDATE schedules SET status = 'Completed', youtube_video_id = ? WHERE id = ?",
-            args: [result.id, item.id]
-          });
-
-          console.log(`[Scheduler] Berhasil upload ID ${item.id}. YouTube ID: ${result.id}`);
-
-          // 4. Hapus file temporary
-          if (item.file_path && fs.existsSync(item.file_path)) {
-            try { fs.unlinkSync(item.file_path); } catch (e) {}
-          }
-
-        } catch (error) {
-          console.error(`[Scheduler] Gagal upload ID ${item.id}:`, error.message);
-
-          await db.execute({
-            sql: "UPDATE schedules SET status = 'Failed', error_message = ? WHERE id = ?",
-            args: [error.message, item.id]
-          });
+    for (const item of pendingItems) {
+      try {
+        // Validasi ketersediaan channel_id pada item antrean
+        if (!item.channel_id) {
+          throw new Error('Video tidak memiliki channel_id tujuan yang valid.');
         }
-      }
-    } catch (err) {
-      if (err.message && err.message.includes('no such table')) {
-        console.log('[Scheduler] Menunggu tabel "schedules" dibuat oleh database.js...');
-      } else {
-        console.error('[Scheduler] Error pada siklus cron job:', err.message);
+
+        console.log(`[Scheduler] Memproses upload ID: ${item.id} - "${item.title}" ke Channel ID: ${item.channel_id}`);
+
+        // 1. Ubah status menjadi 'Processing' agar tidak dieksekusi ganda oleh worker lain
+        db.prepare('UPDATE queue SET status = ? WHERE id = ?').run('Processing', item.id);
+
+        // 2. Eksekusi Upload ke YouTube (youtubeService akan mengambil OAuth token berdasarkan item.channel_id)
+        const result = await uploadVideoToYouTube(item);
+
+        // 3. Update status menjadi 'Completed' dan simpan YouTube Video ID
+        db.prepare(`
+          UPDATE queue 
+          SET status = 'Completed', youtube_id = ? 
+          WHERE id = ?
+        `).run(result.id, item.id);
+
+        console.log(`[Scheduler] Berhasil upload ID ${item.id}. YouTube ID: ${result.id}`);
+
+        // 4. Hapus file temporary di folder uploads setelah sukses upload
+        if (item.file_path && fs.existsSync(item.file_path)) {
+          fs.unlinkSync(item.file_path);
+        }
+
+      } catch (error) {
+        console.error(`[Scheduler] Gagal upload ID ${item.id}:`, error.message);
+
+        // Update status menjadi 'Failed' dan catat pesan error
+        db.prepare(`
+          UPDATE queue 
+          SET status = 'Failed', error_message = ? 
+          WHERE id = ?
+        `).run(error.message, item.id);
       }
     }
   });
