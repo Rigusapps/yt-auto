@@ -1,0 +1,375 @@
+<!-- public/index.html -->
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>YouTube Auto-Scheduler (Multi-Channel)</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 min-h-screen flex flex-col justify-between">
+  
+  <div class="max-w-5xl mx-auto p-8 space-y-8 w-full">
+    
+    <!-- User Bar / Auth Navigation -->
+    <div class="bg-slate-800 text-white p-3 px-6 rounded-lg shadow flex justify-between items-center text-xs">
+      <div id="userInfo" class="font-medium flex items-center gap-2">
+        <span>Memuat data user...</span>
+      </div>
+      <div id="userNav" class="flex items-center gap-3">
+        <!-- Injected via JS -->
+      </div>
+    </div>
+
+    <!-- Header & Listbox Channel Terhubung -->
+    <div class="bg-white p-6 rounded-lg shadow flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+      <div>
+        <h1 class="text-2xl font-bold text-gray-800">YouTube Auto Uploader</h1>
+        <p class="text-sm text-gray-500">Sistem Antrean Multi-Channel & Penjadwalan Otomatis</p>
+      </div>
+      
+      <!-- Listbox Channel Terhubung Ringkas -->
+      <div class="flex items-center gap-2 w-full md:w-auto">
+        <div class="relative flex-1 md:w-64">
+          <select id="connectedChannelsListbox" class="w-full border text-xs p-2.5 rounded-lg bg-gray-50 text-gray-800 border-gray-300 font-medium focus:ring-2 focus:ring-blue-500 outline-none">
+            <option value="">-- Memuat Channel --</option>
+          </select>
+        </div>
+        
+        <!-- Tombol Hapus Channel Terpilih -->
+        <button onclick="window.deleteSelectedChannel()" class="bg-red-100 hover:bg-red-200 text-red-600 border border-red-200 text-xs px-3 py-2.5 rounded-lg font-semibold transition cursor-pointer whitespace-nowrap" title="Hapus channel yang dipilih">
+          Hapus Channel
+        </button>
+
+        <!-- Tombol Tambah Channel -->
+        <a href="/auth" class="bg-blue-600 hover:bg-blue-700 text-white text-xs px-3.5 py-2.5 rounded-lg font-semibold transition flex items-center gap-1 whitespace-nowrap">
+          + Tambah Channel
+        </a>
+      </div>
+    </div>
+
+    <!-- Form Schedule -->
+    <div class="bg-white p-6 rounded-lg shadow">
+      <h2 class="text-lg font-semibold mb-4 border-b pb-2">Jadwalkan Video Baru</h2>
+      <form id="uploadForm" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        
+        <!-- Dropdown Pilih Channel Tujuan -->
+        <div class="md:col-span-2">
+          <label class="block text-sm font-medium mb-1">Pilih Channel Tujuan</label>
+          <select name="channel_id" id="channelSelect" required class="w-full border p-2 rounded bg-white">
+            <option value="">-- Pilih Channel --</option>
+          </select>
+        </div>
+
+        <div class="md:col-span-2">
+          <label class="block text-sm font-medium mb-1">Pilih Video</label>
+          <input type="file" name="video" accept="video/*" required class="w-full border p-2 rounded">
+        </div>
+
+        <div>
+          <label class="block text-sm font-medium mb-1">Judul Video</label>
+          <input type="text" name="title" required class="w-full border p-2 rounded" placeholder="Judul video...">
+        </div>
+
+        <div>
+          <label class="block text-sm font-medium mb-1">Waktu Tayang (Jadwal)</label>
+          <input type="datetime-local" name="scheduled_at" required class="w-full border p-2 rounded">
+        </div>
+
+        <div>
+          <label class="block text-sm font-medium mb-1">Status Privasi</label>
+          <select name="privacy_status" class="w-full border p-2 rounded">
+            <option value="public">Public</option>
+            <option value="private">Private</option>
+            <option value="unlisted">Unlisted</option>
+          </select>
+        </div>
+
+        <div>
+          <label class="block text-sm font-medium mb-1">Tags (Pisahkan koma)</label>
+          <input type="text" name="tags" class="w-full border p-2 rounded" placeholder="gaming, tutorial, nodejs">
+        </div>
+
+        <div class="md:col-span-2">
+          <label class="block text-sm font-medium mb-1">Deskripsi</label>
+          <textarea name="description" rows="3" class="w-full border p-2 rounded" placeholder="Deskripsi video..."></textarea>
+        </div>
+
+        <div class="md:col-span-2">
+          <button type="submit" class="bg-blue-600 text-white px-6 py-2 rounded hover:bg-blue-700 w-full font-medium cursor-pointer">
+            Masukkan ke Antrean
+          </button>
+        </div>
+      </form>
+    </div>
+
+    <!-- Table Queue -->
+    <div class="bg-white p-6 rounded-lg shadow">
+      <div class="flex justify-between items-center mb-4 border-b pb-2">
+        <h2 class="text-lg font-semibold">Tabel Antrean Video</h2>
+        <button onclick="window.clearStuckQueue()" class="bg-red-100 hover:bg-red-200 text-red-700 text-xs px-3 py-1.5 rounded transition cursor-pointer font-medium">
+           Bersihkan Macet / Tanpa Channel
+        </button>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="w-full text-left text-sm border-collapse">
+          <thead>
+            <tr class="bg-gray-50 border-b">
+              <th class="p-3">ID</th>
+              <th class="p-3">Channel</th>
+              <th class="p-3">Judul</th>
+              <th class="p-3">Jadwal Tayang</th>
+              <th class="p-3">Privasi</th>
+              <th class="p-3">Status</th>
+              <th class="p-3">Info/Hasil</th>
+              <th class="p-3">Aksi</th>
+            </tr>
+          </thead>
+          <tbody id="queueTableBody">
+            <!-- Dynamic Rows -->
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- FOOTER -->
+  <footer class="bg-white border-t border-gray-200 mt-12 py-6">
+    <div class="max-w-5xl mx-auto px-8 flex flex-col md:flex-row justify-between items-center gap-4 text-xs text-gray-500">
+      <div>
+        <p class="font-semibold text-gray-700">YouTube Auto Uploader & Scheduler v2.0</p>
+        <p>&copy; 2026 Integrated Local Automation Engine. All rights reserved.</p>
+      </div>
+      <div class="flex items-center gap-4">
+        <span class="inline-flex items-center gap-1.5 text-green-600 bg-green-50 px-2.5 py-1 rounded-full font-medium">
+          <span class="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span> Local Server Running
+        </span>
+        <a href="https://studio.youtube.com" target="_blank" class="hover:text-blue-600 transition">YouTube Studio</a>
+        <a href="https://www.buanamedia.my.id/" target="_blank" class="hover:text-blue-600 transition font-medium">By Buana Media</a>
+      </div>
+    </div>
+  </footer>
+
+  <script>
+    // Cek Sesi Pengguna & Hak Akses
+    async function checkUserSession() {
+      try {
+        const res = await fetch('/api/me');
+        const data = await res.json();
+
+        if (!data.user) {
+          window.location.href = '/login.html';
+          return;
+        }
+
+        document.getElementById('userInfo').innerHTML = `
+          <span>👤 User Login: <strong class="text-blue-300">${data.user.username}</strong></span>
+          <span class="bg-slate-700 px-2 py-0.5 rounded text-[10px] uppercase font-bold text-slate-300">${data.user.role}</span>
+        `;
+
+        const userNav = document.getElementById('userNav');
+        userNav.innerHTML = '';
+        
+        if (data.user.role === 'admin') {
+          userNav.innerHTML += `<a href="/admin.html" class="bg-purple-600 hover:bg-purple-700 text-white px-2.5 py-1 rounded font-medium transition">Panel Admin</a>`;
+        }
+
+        userNav.innerHTML += `<button onclick="window.logoutApp()" class="bg-red-600 hover:bg-red-700 text-white px-2.5 py-1 rounded font-medium transition cursor-pointer">Logout</button>`;
+      } catch (err) {
+        console.error("Gagal memeriksa sesi user:", err);
+      }
+    }
+
+    // Fungsi Logout Aplikasi
+    window.logoutApp = async function() {
+      if (!confirm('Apakah Anda yakin ingin logout dari aplikasi?')) return;
+      await fetch('/api/logout', { method: 'POST' });
+      window.location.href = '/login.html';
+    };
+
+    // Load Daftar Channel Terhubung ke Listbox Header & Dropdown Form
+    async function loadChannels() {
+      try {
+        const res = await fetch('/channels');
+        if (res.status === 401) return;
+        const channels = await res.json();
+        
+        const listbox = document.getElementById('connectedChannelsListbox');
+        const channelSelect = document.getElementById('channelSelect');
+
+        listbox.innerHTML = '';
+        channelSelect.innerHTML = '<option value="">-- Pilih Channel --</option>';
+
+        if (channels.length === 0) {
+          listbox.innerHTML = `<option value="">Belum Ada Channel Terhubung</option>`;
+          return;
+        }
+
+        listbox.innerHTML = `<option value="">-- Daftar Channel (${channels.length}) --</option>`;
+
+        channels.forEach(ch => {
+          // Isi ke Listbox Header
+          listbox.innerHTML += `<option value="${ch.id}">📺 ${ch.title}</option>`;
+
+          // Isi ke Dropdown Form
+          channelSelect.innerHTML += `<option value="${ch.id}">${ch.title}</option>`;
+        });
+      } catch (err) {
+        console.error("Gagal memuat daftar channel:", err);
+      }
+    }
+
+    // Fungsi Hapus Channel yang Dipilih dari Listbox
+    window.deleteSelectedChannel = async function() {
+      const listbox = document.getElementById('connectedChannelsListbox');
+      const selectedChannelId = listbox.value;
+
+      if (!selectedChannelId) {
+        alert('Silakan pilih channel dari listbox terlebih dahulu!');
+        return;
+      }
+
+      // Ambil nama channel terpilih untuk konfirmasi
+      const selectedOptionText = listbox.options[listbox.selectedIndex].text;
+
+      if (!confirm(`Apakah Anda yakin ingin memutus koneksi ${selectedOptionText}?`)) return;
+
+      try {
+        const res = await fetch(`/channels/${selectedChannelId}`, { method: 'DELETE' });
+        if (res.ok) {
+          alert('Channel berhasil dihapus/diputus koneksinya.');
+          await loadChannels();
+          await loadQueue();
+        } else {
+          alert('Gagal menghapus channel.');
+        }
+      } catch (err) {
+        alert('Terjadi kesalahan: ' + err.message);
+      }
+    };
+
+    // Bersihkan Antrean Macet/Failed/Tanpa Channel Sekaligus
+    window.clearStuckQueue = async function() {
+      if (!confirm('Apakah Anda yakin ingin menghapus semua antrean yang macet, gagal, atau tanpa channel?')) return;
+
+      try {
+        const res = await fetch('/clear-stuck-queue', { method: 'DELETE' });
+        const data = await res.json();
+        if (res.ok) {
+          alert(data.message);
+          await loadQueue();
+        } else {
+          alert('Gagal membersihkan: ' + (data.error || 'Terjadi kesalahan server'));
+        }
+      } catch (err) {
+        alert('Terjadi kesalahan: ' + err.message);
+      }
+    };
+
+    // Load Data Antrean
+    async function loadQueue() {
+      try {
+        const res = await fetch('/queue-status');
+        if (res.status === 401) return;
+        const queue = await res.json();
+        const tbody = document.getElementById('queueTableBody');
+        tbody.innerHTML = '';
+
+        queue.forEach((item, index) => {
+          let statusBadge = '';
+          if (item.status === 'Pending') statusBadge = `<span class="bg-yellow-100 text-yellow-800 text-xs px-2 py-1 rounded font-medium">Pending</span>`;
+          else if (item.status === 'Processing') statusBadge = `<span class="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded font-medium">Processing</span>`;
+          else if (item.status === 'Completed') statusBadge = `<span class="bg-green-100 text-green-800 text-xs px-2 py-1 rounded font-medium">Completed</span>`;
+          else statusBadge = `<span class="bg-red-100 text-red-800 text-xs px-2 py-1 rounded font-medium">Failed</span>`;
+
+          let info = '-';
+          if (item.youtube_id) {
+            info = `<a href="https://youtu.be/${item.youtube_id}" target="_blank" class="text-blue-600 underline font-medium">Lihat Video</a>`;
+          } else if (item.error_message) {
+            info = `<span class="text-red-500 text-xs">${item.error_message}</span>`;
+          }
+
+          let actionBtn = `<button onclick="window.deleteQueue(${item.id})" class="bg-red-500 hover:bg-red-600 text-white text-xs px-3 py-1 rounded transition cursor-pointer font-medium">Hapus</button>`;
+
+          let displayDate = item.scheduled_at;
+          if (item.scheduled_at) {
+            const rawValue = !isNaN(item.scheduled_at) ? parseInt(item.scheduled_at) : item.scheduled_at;
+            const dateObj = new Date(rawValue);
+            
+            if (!isNaN(dateObj.getTime())) {
+              displayDate = dateObj.toLocaleString('id-ID', {
+                year: 'numeric',
+                month: 'numeric',
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit',
+                hour12: false
+              });
+            }
+          }
+
+          tbody.innerHTML += `
+            <tr class="border-b">
+              <td class="p-3">${index + 1}</td>
+              <td class="p-3 font-semibold text-gray-700">${item.channel_name || '<span class="text-red-500 font-normal">Tidak Ada Channel</span>'}</td>
+              <td class="p-3 font-medium">${item.title}</td>
+              <td class="p-3">${displayDate}</td>
+              <td class="p-3 capitalize">${item.privacy_status}</td>
+              <td class="p-3">${statusBadge}</td>
+              <td class="p-3">${info}</td>
+              <td class="p-3">${actionBtn}</td>
+            </tr>
+          `;
+        });
+      } catch (err) {
+        console.error("Gagal memuat antrean:", err);
+      }
+    }
+
+    // Fungsi Hapus Item Antrean (Per-baris)
+    window.deleteQueue = async function(id) {
+      if (!confirm('Apakah Anda yakin ingin menghapus item ini?')) return;
+
+      try {
+        const res = await fetch(`/queue/${id}`, { method: 'DELETE' });
+        if (res.ok) {
+          await loadQueue();
+        } else {
+          const err = await res.json();
+          alert('Gagal menghapus: ' + (err.error || 'Terjadi kesalahan server'));
+        }
+      } catch (err) {
+        alert('Gagal menghapus: ' + err.message);
+      }
+    };
+
+    // Submit Form Event
+    document.getElementById('uploadForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const formData = new FormData(e.target);
+
+      const res = await fetch('/schedule', {
+        method: 'POST',
+        body: formData
+      });
+
+      if (res.ok) {
+        alert('Video berhasil dijadwalkan!');
+        e.target.reset();
+        loadQueue();
+      } else {
+        const err = await res.json();
+        alert('Gagal: ' + err.error);
+      }
+    });
+
+    // Run on load
+    checkUserSession();
+    loadChannels();
+    loadQueue();
+    setInterval(loadQueue, 10000);
+  </script>
+</body>
+</html>

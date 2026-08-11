@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin Panel - Kelola User & Approval</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 min-h-screen p-8">
+  <div class="max-w-6xl mx-auto bg-white p-6 rounded-lg shadow space-y-6">
+    
+    <div class="flex justify-between items-center border-b pb-4">
+      <div>
+        <h1 class="text-2xl font-bold text-gray-800">Admin Panel Control</h1>
+        <p class="text-xs text-gray-500">Konfirmasi dan kelola hak akses akun pendaftar</p>
+      </div>
+      <a href="/" class="bg-gray-600 hover:bg-gray-700 text-white text-xs px-3 py-2 rounded font-medium transition">
+        ← Kembali ke Dashboard
+      </a>
+    </div>
+
+    <div class="overflow-x-auto">
+      <h2 class="text-lg font-semibold mb-3">Daftar Pengguna & Permintaan Persetujuan</h2>
+      <table class="w-full text-left border-collapse text-sm">
+        <thead>
+          <tr class="bg-gray-50 border-b text-gray-700">
+            <th class="p-3">ID</th>
+            <th class="p-3">Username</th>
+            <th class="p-3">Email</th>
+            <th class="p-3">WhatsApp</th>
+            <th class="p-3">Role</th>
+            <th class="p-3">Status Akses</th>
+            <th class="p-3">Aksi Konfirmasi</th>
+          </tr>
+        </thead>
+        <tbody id="userTableBody">
+          <!-- Dynamic User Rows -->
+        </tbody>
+      </table>
+    </div>
+
+  </div>
+
+  <script>
+    async function loadUsers() {
+      try {
+        const res = await fetch('/api/admin/users');
+        if (res.status === 403 || res.status === 401) {
+          alert('Akses Admin Ditolak!');
+          window.location.href = '/';
+          return;
+        }
+
+        const users = await res.json();
+        const tbody = document.getElementById('userTableBody');
+        tbody.innerHTML = '';
+
+        users.forEach(u => {
+          let statusBadge = u.is_approved === 1 
+            ? `<span class="bg-green-100 text-green-800 text-xs px-2.5 py-1 rounded-full font-semibold">✓ Disetujui</span>`
+            : `<span class="bg-yellow-100 text-yellow-800 text-xs px-2.5 py-1 rounded-full font-semibold">⏳ Menunggu</span>`;
+
+          let approvalBtn = '-';
+          if (u.role !== 'admin') {
+            if (u.is_approved === 1) {
+              approvalBtn = `<button onclick="toggleApprove(${u.id}, 0)" class="bg-amber-500 hover:bg-amber-600 text-white text-xs px-2.5 py-1 rounded cursor-pointer font-medium">Tangguhkan</button>`;
+            } else {
+              approvalBtn = `<button onclick="toggleApprove(${u.id}, 1)" class="bg-green-600 hover:bg-green-700 text-white text-xs px-2.5 py-1 rounded cursor-pointer font-medium">Setujui Akun</button>`;
+            }
+          }
+
+          let deleteBtn = u.role !== 'admin' 
+            ? `<button onclick="deleteUser(${u.id})" class="bg-red-500 hover:bg-red-600 text-white text-xs px-2.5 py-1 rounded cursor-pointer font-medium ml-1">Hapus</button>` 
+            : '';
+
+          // Format WhatsApp Link
+          let cleanWa = u.whatsapp ? u.whatsapp.replace(/[^0-9]/g, '') : '';
+          if (cleanWa.startsWith('0')) cleanWa = '62' + cleanWa.slice(1);
+          let waLink = cleanWa ? `<a href="https://wa.me/${cleanWa}" target="_blank" class="text-green-600 font-medium underline">${u.whatsapp}</a>` : '-';
+
+          tbody.innerHTML += `
+            <tr class="border-b">
+              <td class="p-3">${u.id}</td>
+              <td class="p-3 font-semibold text-gray-800">${u.username}</td>
+              <td class="p-3">${u.email || '-'}</td>
+              <td class="p-3">${waLink}</td>
+              <td class="p-3"><span class="px-2 py-0.5 bg-blue-100 text-blue-800 rounded text-xs capitalize font-medium">${u.role}</span></td>
+              <td class="p-3">${statusBadge}</td>
+              <td class="p-3 flex items-center">${approvalBtn} ${deleteBtn}</td>
+            </tr>
+          `;
+        });
+      } catch (err) {
+        console.error("Gagal memuat pengguna:", err);
+      }
+    }
+
+    async function toggleApprove(id, is_approved) {
+      const actionText = is_approved === 1 ? 'menyetujui' : 'menangguhkan';
+      if (!confirm(`Apakah Anda yakin ingin ${actionText} akun ini?`)) return;
+
+      try {
+        const res = await fetch(`/api/admin/approve/${id}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ is_approved })
+        });
+
+        if (res.ok) {
+          loadUsers();
+        } else {
+          alert('Gagal mengubah status persetujuan.');
+        }
+      } catch (err) {
+        alert('Terjadi kesalahan: ' + err.message);
+      }
+    }
+
+    async function deleteUser(id) {
+      if (!confirm('Apakah Anda yakin ingin menghapus pengguna ini secara permanen?')) return;
+      await fetch(`/api/admin/users/${id}`, { method: 'DELETE' });
+      loadUsers();
+    }
+
+    loadUsers();
+  </script>
+</body>
+</html>
