@@ -1,14 +1,20 @@
+require('dotenv').config();
 const { createClient } = require('@libsql/client');
 
-// Menggunakan Environment Variables dari Render
+// Pastikan Environment Variable tersedia
+if (!process.env.TURSO_DATABASE_URL || !process.env.TURSO_AUTH_TOKEN) {
+  console.error('⚠️ WARN: TURSO_DATABASE_URL atau TURSO_AUTH_TOKEN belum terpasang di Environment Variables!');
+}
+
+// Inisialisasi Client Turso
 const turso = createClient({
-  url: process.env.TURSO_DATABASE_URL,
-  authToken: process.env.TURSO_AUTH_TOKEN,
+  url: process.env.TURSO_DATABASE_URL || 'file:scheduler.db',
+  authToken: process.env.TURSO_AUTH_TOKEN || undefined,
 });
 
 async function initDb() {
   try {
-    // Tabel Users
+    // 1. Tabel Users
     await turso.execute(`
       CREATE TABLE IF NOT EXISTS users (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -22,7 +28,7 @@ async function initDb() {
       )
     `);
 
-    // Tabel Channels
+    // 2. Tabel Channels
     await turso.execute(`
       CREATE TABLE IF NOT EXISTS channels (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -35,7 +41,7 @@ async function initDb() {
       )
     `);
 
-    // Tabel Schedules / Video Queue
+    // 3. Tabel Schedules / Video Queue
     await turso.execute(`
       CREATE TABLE IF NOT EXISTS schedules (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -61,6 +67,7 @@ async function initDb() {
   }
 }
 
+// Jalankan pembuatan tabel
 initDb();
 
 module.exports = turso;
