@@ -1,27 +1,33 @@
 require('dotenv').config();
 const { createClient } = require('@libsql/client');
 
-// Ambil URL dan Token dari Environment Render
-let dbUrl = (process.env.TURSO_DATABASE_URL || '').trim();
-let authToken = (process.env.TURSO_AUTH_TOKEN || '').trim();
-
-// Pastikan protokol menggunakan https:// agar library Turso tidak meminta WebSocket / Migration Jobs
-if (dbUrl.startsWith('libsql://')) {
-  dbUrl = dbUrl.replace('libsql://', 'https://');
+// 1. Ambil dan bersihkan string dari spasi, enter, atau tanda petik tak sengaja
+function cleanEnv(val) {
+  if (!val) return '';
+  return val.trim().replace(/^["']|["']$/g, '');
 }
+
+const dbUrl = cleanEnv(process.env.TURSO_DATABASE_URL);
+const authToken = cleanEnv(process.env.TURSO_AUTH_TOKEN);
+
+// 2. Cetak Diagnostik Koneksi di Log Server
+console.log('--- DIAGNOSTIK KONEKSI TURSO ---');
+console.log('URL Terdeteksi :', dbUrl ? dbUrl.substring(0, 30) + '...' : '❌ KOSONG / UNDEFINED');
+console.log('Token Terdeteksi:', authToken ? '✅ ADA (' + authToken.length + ' karakter)' : '❌ KOSONG / UNDEFINED');
+console.log('--------------------------------');
 
 if (!dbUrl || !authToken) {
-  console.error('❌ EROR KRITIS: TURSO_DATABASE_URL atau TURSO_AUTH_TOKEN belum diisi di Environment Variables Render!');
+  console.error('❌ CRITICAL ERROR: Variabel TURSO_DATABASE_URL atau TURSO_AUTH_TOKEN tidak ditemukan di Render!');
 }
 
+// 3. Inisialisasi Turso Client
 const turso = createClient({
   url: dbUrl,
-  authToken: authToken,
+  authToken: authToken
 });
 
 async function initDb() {
   try {
-    // 1. Tabel Users
     await turso.execute(`
       CREATE TABLE IF NOT EXISTS users (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -32,10 +38,9 @@ async function initDb() {
         role TEXT DEFAULT 'user',
         is_approved INTEGER DEFAULT 0,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-      );
+      )
     `);
 
-    // 2. Tabel Channels
     await turso.execute(`
       CREATE TABLE IF NOT EXISTS channels (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -45,10 +50,9 @@ async function initDb() {
         refresh_token TEXT NOT NULL,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
-      );
+      )
     `);
 
-    // 3. Tabel Schedules
     await turso.execute(`
       CREATE TABLE IF NOT EXISTS schedules (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -65,15 +69,15 @@ async function initDb() {
         error_message TEXT,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
-      );
+      )
     `);
 
-    console.log('✅ BERHASIL: Semua tabel Turso Cloud siap!');
-    return true;
+    console.log('✅ KONEKSI SUKSES: Semua tabel Turso Cloud siap!');
   } catch (err) {
-    console.error('❌ Gagal inisialisasi tabel Turso:', err.message || err);
-    return false;
+    console.error('❌ Gagal Inisialisasi Turso:', err.message || err);
   }
 }
 
-module.exports = { turso, initDb };
+initDb();
+
+module.exports = turso;
