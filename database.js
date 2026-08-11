@@ -4,12 +4,11 @@ const { createClient } = require('@libsql/client');
 let dbUrl = (process.env.TURSO_DATABASE_URL || '').trim().replace(/^["']|["']$/g, '');
 let authToken = (process.env.TURSO_AUTH_TOKEN || '').trim().replace(/^["']|["']$/g, '');
 
-// Pastikan menggunakan format https:// untuk koneksi REST API Turso agar bebas dari error migrasi WebSocket/400
+// Paksa ubah ke https:// untuk menghindari error migration jobs 400
 if (dbUrl.startsWith('libsql://')) {
   dbUrl = dbUrl.replace('libsql://', 'https://');
 }
 
-// Inisialisasi Turso Client dengan skema HTTP murni
 const turso = createClient({
   url: dbUrl,
   authToken: authToken,
@@ -17,7 +16,6 @@ const turso = createClient({
 
 async function initDb() {
   try {
-    // 1. Tabel Users
     await turso.execute(`
       CREATE TABLE IF NOT EXISTS users (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -31,7 +29,6 @@ async function initDb() {
       )
     `);
 
-    // 2. Tabel Channels
     await turso.execute(`
       CREATE TABLE IF NOT EXISTS channels (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -44,7 +41,6 @@ async function initDb() {
       )
     `);
 
-    // 3. Tabel Schedules
     await turso.execute(`
       CREATE TABLE IF NOT EXISTS schedules (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -64,10 +60,10 @@ async function initDb() {
       )
     `);
 
-    console.log('✅ Inisialisasi tabel Turso Cloud Berhasil!');
+    console.log('✅ Database Turso Cloud berhasil terhubung via HTTPS!');
     return true;
   } catch (err) {
-    console.error('❌ Gagal inisialisasi tabel Turso:', err.message || err);
+    console.error('❌ Gagal inisialisasi tabel:', err.message || err);
     return false;
   }
 }
