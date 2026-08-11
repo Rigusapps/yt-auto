@@ -5,7 +5,7 @@ const bcrypt = require('bcryptjs');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
-const db = require('./database'); // Mengimpor instance turso secara langsung
+const { turso: db, initDb } = require('./database');
 const { getAuthUrl, handleCallback } = require('./youtubeService');
 const initScheduler = require('./scheduler');
 
@@ -14,7 +14,7 @@ require('dotenv').config();
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// --- PROXY SETTING UNTUK RENDER ---
+// --- PROXY SETTING UNTUK CLOUD DEPLOYMENT (RENDER) ---
 app.set('trust proxy', 1);
 
 // --- MIDDLEWARES ---
@@ -29,7 +29,7 @@ app.use(session({
   saveUninitialized: false,
   cookie: { 
     maxAge: 24 * 60 * 60 * 1000, // 1 Hari
-    secure: false, // Set false agar berjalan lancar di HTTP & HTTPS Render
+    secure: false, // Set false agar stabil di HTTP & HTTPS Render
     sameSite: 'lax'
   }
 }));
@@ -69,9 +69,10 @@ app.post('/api/register', async (req, res) => {
 
     const hashedPassword = await bcrypt.hash(password, 10);
     
-    // Hitung jumlah user
+    // Hitung jumlah user (Aman dari pembacaan dinamis Turso)
     const countRes = await db.execute('SELECT COUNT(*) as cnt FROM users');
-    const count = Number(countRes.rows[0]?.cnt || 0);
+    const firstRow = countRes.rows[0];
+    const count = Number(firstRow?.cnt ?? firstRow?.[0] ?? 0);
 
     // Pendaftar pertama otomatis Admin & Approved
     const role = count === 0 ? 'admin' : 'user';
@@ -246,9 +247,22 @@ app.get('/queue-status', requireAuth, async (req, res) => {
   }
 });
 
-// --- START SERVER & SCHEDULER ---
-initScheduler();
+// --- START SERVER BERURUTAN ---
+async function startServer() {
+  try {
+    // 1. Tunggu inisialisasi tabel selesai
+    await initDb();
+    
+    // 2. Jalankan Worker Scheduler
+    initScheduler();
 
-app.listen(PORT, () => {
-  console.log(`Server berjalan di http://localhost:${PORT}`);
-});
+    // 3. Jalankan Listener Server
+    app.listen(PORT, () => {
+      console.log(`Server berjalan di http://localhost:${PORT}`);
+    });
+  } catch (err) {
+    console.error('❌ Gagal menjalankan server:', err);
+  }
+}
+
+startServer();
