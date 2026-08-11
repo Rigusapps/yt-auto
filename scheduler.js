@@ -5,15 +5,11 @@ const { uploadVideoToYouTube } = require('./youtubeService');
 const fs = require('fs');
 
 function initScheduler() {
-  // Cron expression '* * * * *' = Berjalan otomatis setiap 1 menit
   cron.schedule('* * * * *', async () => {
     try {
-      console.log('[Scheduler] Mengecek antrean video...');
-
-      // Ambil waktu ISO UTC saat ini
       const nowIso = new Date().toISOString();
 
-      // Ambil item Pending yang jadwalnya (scheduled_time) <= waktu saat ini
+      // Query antrean video
       const pendingItemsRes = await db.execute({
         sql: `
           SELECT * FROM schedules 
@@ -24,42 +20,34 @@ function initScheduler() {
       });
 
       const pendingItems = pendingItemsRes.rows;
-
-      if (pendingItems.length === 0) {
-        return;
-      }
+      if (!pendingItems || pendingItems.length === 0) return;
 
       for (const item of pendingItems) {
         try {
-          // Validasi ketersediaan channel_id pada item antrean
           if (!item.channel_id) {
             throw new Error('Video tidak memiliki channel_id tujuan yang valid.');
           }
 
-          console.log(`[Scheduler] Memproses upload ID: ${item.id} - "${item.title}" ke Channel ID: ${item.channel_id}`);
+          console.log(`[Scheduler] Memproses upload ID: ${item.id} - "${item.title}"`);
 
-          // 1. Ubah status menjadi 'Processing' agar tidak dieksekusi ganda oleh worker lain
+          // 1. Ubah status menjadi 'Processing'
           await db.execute({
-            sql: 'UPDATE schedules SET status = ? WHERE id = ?',
-            args: ['Processing', item.id]
+            sql: "UPDATE schedules SET status = 'Processing' WHERE id = ?",
+            args: [item.id]
           });
 
-          // 2. Eksekusi Upload ke YouTube
+          // 2. Upload ke YouTube
           const result = await uploadVideoToYouTube(item);
 
-          // 3. Update status menjadi 'Completed' dan simpan YouTube Video ID
+          // 3. Update status ke 'Completed'
           await db.execute({
-            sql: `
-              UPDATE schedules 
-              SET status = 'Completed', youtube_video_id = ? 
-              WHERE id = ?
-            `,
+            sql: "UPDATE schedules SET status = 'Completed', youtube_video_id = ? WHERE id = ?",
             args: [result.id, item.id]
           });
 
           console.log(`[Scheduler] Berhasil upload ID ${item.id}. YouTube ID: ${result.id}`);
 
-          // 4. Hapus file temporary di folder uploads setelah sukses upload
+          // 4. Hapus file temporary
           if (item.file_path && fs.existsSync(item.file_path)) {
             try { fs.unlinkSync(item.file_path); } catch (e) {}
           }
@@ -67,19 +55,18 @@ function initScheduler() {
         } catch (error) {
           console.error(`[Scheduler] Gagal upload ID ${item.id}:`, error.message);
 
-          // Update status menjadi 'Failed' dan catat pesan error
           await db.execute({
-            sql: `
-              UPDATE schedules 
-              SET status = 'Failed', error_message = ? 
-              WHERE id = ?
-            `,
+            sql: "UPDATE schedules SET status = 'Failed', error_message = ? WHERE id = ?",
             args: [error.message, item.id]
           });
         }
       }
     } catch (err) {
-      console.error('[Scheduler] Error pada siklus cron job:', err.message);
+      if (err.message && err.message.includes('no such table')) {
+        console.log('[Scheduler] Menunggu tabel "schedules" dibuat oleh database.js...');
+      } else {
+        console.error('[Scheduler] Error pada siklus cron job:', err.message);
+      }
     }
   });
 }
