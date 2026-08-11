@@ -5,7 +5,7 @@ const bcrypt = require('bcryptjs');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
-const db = require('./database');
+const db = require('./database'); // Mengimpor instance turso secara langsung
 const { getAuthUrl, handleCallback } = require('./youtubeService');
 const initScheduler = require('./scheduler');
 
@@ -14,7 +14,7 @@ require('dotenv').config();
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// --- PROXY SETTING UNTUK CLOUD DEPLOYMENT (RENDER) ---
+// --- PROXY SETTING UNTUK RENDER ---
 app.set('trust proxy', 1);
 
 // --- MIDDLEWARES ---
@@ -86,6 +86,7 @@ app.post('/api/register', async (req, res) => {
       ? 'Pendaftaran Admin berhasil! Silakan login.' 
       : 'Pendaftaran berhasil! Akun Anda sedang menunggu persetujuan Admin.';
 
+    console.log(`[Auth] User terdaftar: ${username} (${role})`);
     res.json({ success: true, message: msg });
   } catch (err) {
     console.error('[Register Error]:', err);
@@ -131,6 +132,7 @@ app.post('/api/login', async (req, res) => {
       role: String(user.role) 
     };
 
+    console.log(`[Auth] Login berhasil: ${username}`);
     res.json({ success: true, user: req.session.user });
   } catch (err) {
     console.error('[Login Error]:', err);
