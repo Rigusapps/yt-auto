@@ -29,7 +29,7 @@ app.use(session({
   saveUninitialized: false,
   cookie: { 
     maxAge: 24 * 60 * 60 * 1000, // 1 Hari
-    secure: false, // Set false agar stabil di HTTP & HTTPS Render
+    secure: false, // Set false agar lancar di Render HTTP/HTTPS
     sameSite: 'lax'
   }
 }));
@@ -69,7 +69,7 @@ app.post('/api/register', async (req, res) => {
 
     const hashedPassword = await bcrypt.hash(password, 10);
     
-    // Hitung jumlah user (Aman dari pembacaan dinamis Turso)
+    // Hitung jumlah user
     const countRes = await db.execute('SELECT COUNT(*) as cnt FROM users');
     const firstRow = countRes.rows[0];
     const count = Number(firstRow?.cnt ?? firstRow?.[0] ?? 0);
@@ -126,7 +126,6 @@ app.post('/api/login', async (req, res) => {
       return res.status(403).json({ error: 'Akun Anda belum disetujui/diaktifkan oleh Admin.' });
     }
 
-    // Simpan ke session
     req.session.user = { 
       id: Number(user.id), 
       username: String(user.username), 
@@ -250,13 +249,9 @@ app.get('/queue-status', requireAuth, async (req, res) => {
 // --- START SERVER BERURUTAN ---
 async function startServer() {
   try {
-    // 1. Tunggu inisialisasi tabel selesai
     await initDb();
-    
-    // 2. Jalankan Worker Scheduler
     initScheduler();
 
-    // 3. Jalankan Listener Server
     app.listen(PORT, () => {
       console.log(`Server berjalan di http://localhost:${PORT}`);
     });
