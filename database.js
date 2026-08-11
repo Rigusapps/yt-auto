@@ -1,26 +1,23 @@
 require('dotenv').config();
 const { createClient } = require('@libsql/client');
 
-// Sanitasi string URL & Token
 let dbUrl = (process.env.TURSO_DATABASE_URL || '').trim().replace(/^["']|["']$/g, '');
 let authToken = (process.env.TURSO_AUTH_TOKEN || '').trim().replace(/^["']|["']$/g, '');
 
-// Ubah libsql:// menjadi https:// agar koneksi Turso stabil via HTTP
+// Pastikan menggunakan format https:// untuk koneksi REST API Turso agar bebas dari error migrasi WebSocket/400
 if (dbUrl.startsWith('libsql://')) {
   dbUrl = dbUrl.replace('libsql://', 'https://');
 }
 
-if (!dbUrl || !authToken) {
-  console.error('❌ WARN: TURSO_DATABASE_URL atau TURSO_AUTH_TOKEN belum terpasang di Render!');
-}
-
+// Inisialisasi Turso Client dengan skema HTTP murni
 const turso = createClient({
-  url: dbUrl || 'file:scheduler.db',
-  authToken: authToken || undefined,
+  url: dbUrl,
+  authToken: authToken,
 });
 
 async function initDb() {
   try {
+    // 1. Tabel Users
     await turso.execute(`
       CREATE TABLE IF NOT EXISTS users (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -34,6 +31,7 @@ async function initDb() {
       )
     `);
 
+    // 2. Tabel Channels
     await turso.execute(`
       CREATE TABLE IF NOT EXISTS channels (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -46,6 +44,7 @@ async function initDb() {
       )
     `);
 
+    // 3. Tabel Schedules
     await turso.execute(`
       CREATE TABLE IF NOT EXISTS schedules (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -65,7 +64,7 @@ async function initDb() {
       )
     `);
 
-    console.log('✅ Semua tabel (users, channels, schedules) siap di Turso Cloud!');
+    console.log('✅ Inisialisasi tabel Turso Cloud Berhasil!');
     return true;
   } catch (err) {
     console.error('❌ Gagal inisialisasi tabel Turso:', err.message || err);
@@ -73,5 +72,4 @@ async function initDb() {
   }
 }
 
-// EKSPOR DUA-DUANYA AGAR DIPANGGIL DI SERVER.JS TANPA ERROR
 module.exports = { turso, initDb };
