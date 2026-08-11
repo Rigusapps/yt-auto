@@ -5,19 +5,16 @@ const bcrypt = require('bcryptjs');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
-const dbModule = require('./database');
+const db = require('./database');
 const { getAuthUrl, handleCallback } = require('./youtubeService');
 const initScheduler = require('./scheduler');
 
 require('dotenv').config();
 
-const db = dbModule.turso || dbModule;
-const initDb = dbModule.initDb;
-
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// --- PROXY SETTING UNTUK RENDER ---
+// --- PROXY SETTING UNTUK CLOUD DEPLOYMENT (RENDER) ---
 app.set('trust proxy', 1);
 
 // --- MIDDLEWARES ---
@@ -25,14 +22,14 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Pengaturan Session Cookie yang Aman & Kompatibel Cloud
+// Pengaturan Session Cookie
 app.use(session({
   secret: process.env.SESSION_SECRET || 'yt-scheduler-secret-key-12345',
   resave: false,
   saveUninitialized: false,
   cookie: { 
     maxAge: 24 * 60 * 60 * 1000, // 1 Hari
-    secure: false, // Diset false agar cookie sesi login selalu tersimpan stabil di semua domain
+    secure: false, // Set false agar berjalan lancar di HTTP & HTTPS Render
     sameSite: 'lax'
   }
 }));
@@ -72,12 +69,11 @@ app.post('/api/register', async (req, res) => {
 
     const hashedPassword = await bcrypt.hash(password, 10);
     
-    // Hitung jumlah user yang sudah ada
+    // Hitung jumlah user
     const countRes = await db.execute('SELECT COUNT(*) as cnt FROM users');
-    const firstRow = countRes.rows[0];
-    const count = firstRow ? Number(firstRow.cnt || firstRow[0] || 0) : 0;
+    const count = Number(countRes.rows[0]?.cnt || 0);
 
-    // Pendaftar pertama otomatis menjadi Admin & Approved
+    // Pendaftar pertama otomatis Admin & Approved
     const role = count === 0 ? 'admin' : 'user';
     const isApproved = count === 0 ? 1 : 0;
 
@@ -88,9 +84,8 @@ app.post('/api/register', async (req, res) => {
 
     const msg = role === 'admin' 
       ? 'Pendaftaran Admin berhasil! Silakan login.' 
-      : 'Pendaftaran berhasil! Akun Anda sedang menunggu approval Admin.';
+      : 'Pendaftaran berhasil! Akun Anda sedang menunggu persetujuan Admin.';
 
-    console.log(`[Auth] User terdaftar: ${username} (${role})`);
     res.json({ success: true, message: msg });
   } catch (err) {
     console.error('[Register Error]:', err);
@@ -125,19 +120,17 @@ app.post('/api/login', async (req, res) => {
       return res.status(400).json({ error: 'Username atau Password salah!' });
     }
 
-    // Cek status persetujuan akun
     if (user.role !== 'admin' && Number(user.is_approved) !== 1) {
       return res.status(403).json({ error: 'Akun Anda belum disetujui/diaktifkan oleh Admin.' });
     }
 
-    // Simpan data ke session
+    // Simpan ke session
     req.session.user = { 
       id: Number(user.id), 
       username: String(user.username), 
       role: String(user.role) 
     };
 
-    console.log(`[Auth] Login berhasil: ${username}`);
     res.json({ success: true, user: req.session.user });
   } catch (err) {
     console.error('[Login Error]:', err);
@@ -251,20 +244,9 @@ app.get('/queue-status', requireAuth, async (req, res) => {
   }
 });
 
-// --- START SERVER ---
-async function startServer() {
-  try {
-    if (typeof initDb === 'function') {
-      await initDb();
-    }
-    initScheduler();
+// --- START SERVER & SCHEDULER ---
+initScheduler();
 
-    app.listen(PORT, () => {
-      console.log(`Server berjalan di http://localhost:${PORT}`);
-    });
-  } catch (err) {
-    console.error('❌ Gagal start server:', err);
-  }
-}
-
-startServer();
+app.listen(PORT, () => {
+  console.log(`Server berjalan di http://localhost:${PORT}`);
+});
