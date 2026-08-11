@@ -1,29 +1,22 @@
 require('dotenv').config();
 const { createClient } = require('@libsql/client');
 
-// 1. Ambil dan bersihkan string dari spasi, enter, atau tanda petik tak sengaja
-function cleanEnv(val) {
-  if (!val) return '';
-  return val.trim().replace(/^["']|["']$/g, '');
+// Sanitasi string URL & Token
+let dbUrl = (process.env.TURSO_DATABASE_URL || '').trim().replace(/^["']|["']$/g, '');
+let authToken = (process.env.TURSO_AUTH_TOKEN || '').trim().replace(/^["']|["']$/g, '');
+
+// Ubah libsql:// menjadi https:// agar koneksi Turso stabil via HTTP
+if (dbUrl.startsWith('libsql://')) {
+  dbUrl = dbUrl.replace('libsql://', 'https://');
 }
-
-const dbUrl = cleanEnv(process.env.TURSO_DATABASE_URL);
-const authToken = cleanEnv(process.env.TURSO_AUTH_TOKEN);
-
-// 2. Cetak Diagnostik Koneksi di Log Server
-console.log('--- DIAGNOSTIK KONEKSI TURSO ---');
-console.log('URL Terdeteksi :', dbUrl ? dbUrl.substring(0, 30) + '...' : '❌ KOSONG / UNDEFINED');
-console.log('Token Terdeteksi:', authToken ? '✅ ADA (' + authToken.length + ' karakter)' : '❌ KOSONG / UNDEFINED');
-console.log('--------------------------------');
 
 if (!dbUrl || !authToken) {
-  console.error('❌ CRITICAL ERROR: Variabel TURSO_DATABASE_URL atau TURSO_AUTH_TOKEN tidak ditemukan di Render!');
+  console.error('❌ WARN: TURSO_DATABASE_URL atau TURSO_AUTH_TOKEN belum terpasang di Render!');
 }
 
-// 3. Inisialisasi Turso Client
 const turso = createClient({
-  url: dbUrl,
-  authToken: authToken
+  url: dbUrl || 'file:scheduler.db',
+  authToken: authToken || undefined,
 });
 
 async function initDb() {
@@ -72,12 +65,13 @@ async function initDb() {
       )
     `);
 
-    console.log('✅ KONEKSI SUKSES: Semua tabel Turso Cloud siap!');
+    console.log('✅ Semua tabel (users, channels, schedules) siap di Turso Cloud!');
+    return true;
   } catch (err) {
-    console.error('❌ Gagal Inisialisasi Turso:', err.message || err);
+    console.error('❌ Gagal inisialisasi tabel Turso:', err.message || err);
+    return false;
   }
 }
 
-initDb();
-
-module.exports = turso;
+// EKSPOR DUA-DUANYA AGAR DIPANGGIL DI SERVER.JS TANPA ERROR
+module.exports = { turso, initDb };
