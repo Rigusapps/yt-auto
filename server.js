@@ -5,11 +5,15 @@ const bcrypt = require('bcryptjs');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
-const { turso: db, initDb } = require('./database');
+const dbModule = require('./database');
 const { getAuthUrl, handleCallback } = require('./youtubeService');
 const initScheduler = require('./scheduler');
 
 require('dotenv').config();
+
+// Ambil instance turso db dan fungsi initDb
+const db = dbModule.turso || dbModule;
+const initDb = dbModule.initDb;
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -26,9 +30,11 @@ app.use(session({
   secret: process.env.SESSION_SECRET || 'yt-scheduler-secret-key-12345',
   resave: false,
   saveUninitialized: false,
+  unset: 'destroy',
   cookie: { 
     maxAge: 24 * 60 * 60 * 1000, // 1 Hari
-    secure: process.env.NODE_ENV === 'production' // Secure cookie di Render (HTTPS)
+    secure: process.env.NODE_ENV === 'production', // Secure cookie di Render (HTTPS)
+    sameSite: 'lax'
   }
 }));
 
@@ -85,7 +91,7 @@ app.post('/api/register', async (req, res) => {
 
     res.json({ message: msg });
   } catch (err) {
-    if (err.message.includes('UNIQUE')) {
+    if (err.message && err.message.includes('UNIQUE')) {
       return res.status(400).json({ error: 'Username sudah digunakan.' });
     }
     res.status(500).json({ error: err.message });
@@ -395,14 +401,19 @@ app.delete('/api/admin/users/:id', requireAdmin, async (req, res) => {
 
 // --- WORKER & SERVER INIT ---
 
-// Inisialisasi Database Turso dan Server secara berurutan
 async function startServer() {
-  await initDb();
-  initScheduler();
+  try {
+    if (typeof initDb === 'function') {
+      await initDb();
+    }
+    initScheduler();
 
-  app.listen(PORT, () => {
-    console.log(`Server berjalan di http://localhost:${PORT}`);
-  });
+    app.listen(PORT, () => {
+      console.log(`Server berjalan di http://localhost:${PORT}`);
+    });
+  } catch (err) {
+    console.error('❌ Gagal menjalankan server:', err);
+  }
 }
 
 startServer();
