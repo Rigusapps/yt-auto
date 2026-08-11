@@ -1,19 +1,22 @@
 require('dotenv').config();
 const { createClient } = require('@libsql/client');
 
-let dbUrl = process.env.TURSO_DATABASE_URL ? process.env.TURSO_DATABASE_URL.trim() : '';
-let authToken = process.env.TURSO_AUTH_TOKEN ? process.env.TURSO_AUTH_TOKEN.trim() : '';
+// Ambil URL dan Token dari Environment Render
+let dbUrl = (process.env.TURSO_DATABASE_URL || '').trim();
+let authToken = (process.env.TURSO_AUTH_TOKEN || '').trim();
 
-// Koreksi otomatis jika protokol diawali https://
-if (dbUrl.startsWith('https://')) {
-  dbUrl = dbUrl.replace('https://', 'libsql://');
-} else if (dbUrl.startsWith('http://')) {
-  dbUrl = dbUrl.replace('http://', 'libsql://');
+// Pastikan protokol menggunakan https:// agar library Turso tidak meminta WebSocket / Migration Jobs
+if (dbUrl.startsWith('libsql://')) {
+  dbUrl = dbUrl.replace('libsql://', 'https://');
+}
+
+if (!dbUrl || !authToken) {
+  console.error('❌ EROR KRITIS: TURSO_DATABASE_URL atau TURSO_AUTH_TOKEN belum diisi di Environment Variables Render!');
 }
 
 const turso = createClient({
-  url: dbUrl || 'file:scheduler.db',
-  authToken: authToken || undefined,
+  url: dbUrl,
+  authToken: authToken,
 });
 
 async function initDb() {
@@ -29,7 +32,7 @@ async function initDb() {
         role TEXT DEFAULT 'user',
         is_approved INTEGER DEFAULT 0,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-      )
+      );
     `);
 
     // 2. Tabel Channels
@@ -42,7 +45,7 @@ async function initDb() {
         refresh_token TEXT NOT NULL,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
-      )
+      );
     `);
 
     // 3. Tabel Schedules
@@ -62,13 +65,13 @@ async function initDb() {
         error_message TEXT,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
-      )
+      );
     `);
 
-    console.log('✅ Semua tabel (users, channels, schedules) siap di Turso Cloud!');
+    console.log('✅ BERHASIL: Semua tabel Turso Cloud siap!');
     return true;
   } catch (err) {
-    console.error('❌ Gagal inisialisasi tabel:', err.message || err);
+    console.error('❌ Gagal inisialisasi tabel Turso:', err.message || err);
     return false;
   }
 }
