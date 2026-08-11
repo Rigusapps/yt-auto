@@ -5,14 +5,17 @@ const { createClient } = require('@libsql/client');
 const dbUrl = process.env.TURSO_DATABASE_URL ? process.env.TURSO_DATABASE_URL.trim() : '';
 const authToken = process.env.TURSO_AUTH_TOKEN ? process.env.TURSO_AUTH_TOKEN.trim() : '';
 
-if (!dbUrl || !authToken) {
-  console.error('⚠️ WARN: TURSO_DATABASE_URL atau TURSO_AUTH_TOKEN belum terpasang dengan benar!');
+// Validasi keberadaan kredensial Turso
+const isTursoConfigured = dbUrl.length > 0 && authToken.length > 0;
+
+if (!isTursoConfigured) {
+  console.warn('⚠️ WARN: TURSO_DATABASE_URL atau TURSO_AUTH_TOKEN belum terpasang dengan benar di Render. Menggunakan database lokal sementara.');
 }
 
-// Inisialisasi Turso Client
+// Inisialisasi Turso Client dengan Opsi Aman
 const turso = createClient({
-  url: dbUrl,
-  authToken: authToken
+  url: isTursoConfigured ? dbUrl : 'file:scheduler.db',
+  authToken: isTursoConfigured ? authToken : undefined
 });
 
 async function initDb() {
@@ -64,13 +67,15 @@ async function initDb() {
       )
     `);
 
-    console.log('✅ Semua tabel (users, channels, schedules) berhasil dibuat di Turso Cloud!');
+    console.log('✅ Semua tabel (users, channels, schedules) berhasil dibuat/diverifikasi di Turso Cloud!');
+    return true;
   } catch (err) {
     console.error('❌ Gagal membuat tabel di Turso:', err.message || err);
+    return false;
   }
 }
 
-// Jalankan pembuatan tabel saat server start
+// Jalankan pembuatan tabel saat file dimuat
 initDb();
 
-module.exports = turso;
+module.exports = { turso, initDb };
