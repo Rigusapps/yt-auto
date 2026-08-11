@@ -28,7 +28,7 @@ app.use(session({
   saveUninitialized: false,
   cookie: { 
     maxAge: 24 * 60 * 60 * 1000, // 1 Hari
-    secure: process.env.NODE_ENV === 'production' // Otomatis aktifkan secure cookie jika di Render (HTTPS)
+    secure: process.env.NODE_ENV === 'production' // Secure cookie di Render (HTTPS)
   }
 }));
 
@@ -69,15 +69,15 @@ app.post('/api/register', async (req, res) => {
     const hashedPassword = await bcrypt.hash(password, 10);
     
     // Pendaftar pertama otomatis menjadi Admin & Langsung Approved
-    const count = db.prepare('SELECT COUNT(*) as cnt FROM users').get().cnt;
+    const countRes = await db.execute('SELECT COUNT(*) as cnt FROM users');
+    const count = Number(countRes.rows[0].cnt);
     const role = count === 0 ? 'admin' : 'user';
     const isApproved = count === 0 ? 1 : 0;
 
-    const stmt = db.prepare(`
-      INSERT INTO users (username, password, email, whatsapp, role, is_approved) 
-      VALUES (?, ?, ?, ?, ?, ?)
-    `);
-    stmt.run(username, hashedPassword, email, whatsapp, role, isApproved);
+    await db.execute({
+      sql: 'INSERT INTO users (username, password, email, whatsapp, role, is_approved) VALUES (?, ?, ?, ?, ?, ?)',
+      args: [username, hashedPassword, email, whatsapp, role, isApproved]
+    });
 
     const msg = role === 'admin' 
       ? 'Pendaftaran Admin berhasil! Silakan login.' 
@@ -96,14 +96,18 @@ app.post('/api/register', async (req, res) => {
 app.post('/api/login', async (req, res) => {
   try {
     const { username, password } = req.body;
-    const user = db.prepare('SELECT * FROM users WHERE username = ?').get(username);
+    const userRes = await db.execute({
+      sql: 'SELECT * FROM users WHERE username = ?',
+      args: [username]
+    });
+    const user = userRes.rows[0];
     
     if (!user || !(await bcrypt.compare(password, user.password))) {
       return res.status(400).json({ error: 'Username atau Password salah!' });
     }
 
     // Cek Persetujuan Admin untuk User Biasa
-    if (user.role !== 'admin' && user.is_approved !== 1) {
+    if (user.role !== 'admin' && Number(user.is_approved) !== 1) {
       return res.status(403).json({ error: 'Akun Anda belum disetujui/diaktifkan oleh Admin. Silakan hubungi admin.' });
     }
 
@@ -153,29 +157,38 @@ app.get('/oauth2callback', async (req, res) => {
 });
 
 // Get Daftar Channel Milik User
-app.get('/channels', requireAuth, (req, res) => {
+app.get('/channels', requireAuth, async (req, res) => {
   try {
     const userId = req.session.user.id;
-    const channels = req.session.user.role === 'admin' 
-      ? db.prepare('SELECT id, title, avatar_url FROM channels').all()
-      : db.prepare('SELECT id, title, avatar_url FROM channels WHERE user_id = ?').all(userId);
-    res.json(channels);
+    const channelsRes = req.session.user.role === 'admin' 
+      ? await db.execute('SELECT id, channel_id, channel_title FROM channels')
+      : await db.execute({
+          sql: 'SELECT id, channel_id, channel_title FROM channels WHERE user_id = ?',
+          args: [userId]
+        });
+    res.json(channelsRes.rows);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
 // Hapus Koneksi Channel
-app.delete('/channels/:id', requireAuth, (req, res) => {
+app.delete('/channels/:id', requireAuth, async (req, res) => {
   try {
     const channelId = req.params.id;
     const userId = req.session.user.id;
     const isAdmin = req.session.user.role === 'admin';
 
     if (isAdmin) {
-      db.prepare('DELETE FROM channels WHERE id = ?').run(channelId);
+      await db.execute({
+        sql: 'DELETE FROM channels WHERE id = ?',
+        args: [channelId]
+      });
     } else {
-      db.prepare('DELETE FROM channels WHERE id = ? AND user_id = ?').run(channelId, userId);
+      await db.execute({
+        sql: 'DELETE FROM channels WHERE id = ? AND user_id = ?',
+        args: [channelId, userId]
+      });
     }
     
     res.json({ success: true, message: 'Channel berhasil dihapus' });
@@ -187,7 +200,7 @@ app.delete('/channels/:id', requireAuth, (req, res) => {
 // --- QUEUE MANAGEMENT ROUTES ---
 
 // Tambah Video Baru ke Antrean
-app.post('/schedule', requireAuth, upload.single('video'), (req, res) => {
+app.post('/schedule', requireAuth, upload.single('video'), async (req, res) => {
   try {
     const { title, description, tags, privacy_status, scheduled_at, channel_id } = req.body;
     
@@ -198,18 +211,16 @@ app.post('/schedule', requireAuth, upload.single('video'), (req, res) => {
       return res.status(400).json({ error: 'Pilih channel tujuan unggah!' });
     }
 
-    const timestamp = new Date(scheduled_at).getTime();
-    if (isNaN(timestamp)) {
-      return res.status(400).json({ error: 'Format tanggal/waktu tidak valid!' });
-    }
-
+    const scheduledTime = new Date(scheduled_at).toISOString();
     const userId = req.session.user.id;
 
-    const stmt = db.prepare(`
-      INSERT INTO queue (title, description, tags, privacy_status, scheduled_at, file_path, channel_id, user_id)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    `);
-    stmt.run(title, description, tags, privacy_status, timestamp, req.file.path, channel_id, userId);
+    await db.execute({
+      sql: `
+        INSERT INTO schedules (title, description, tags, privacy_status, scheduled_time, file_path, channel_id, user_id, status)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'Pending')
+      `,
+      args: [title, description, tags, privacy_status, scheduledTime, req.file.path, channel_id, userId]
+    });
 
     res.json({ message: 'Video berhasil ditambahkan ke antrean!' });
   } catch (err) {
@@ -218,40 +229,48 @@ app.post('/schedule', requireAuth, upload.single('video'), (req, res) => {
 });
 
 // Get List Antrean Video
-app.get('/queue-status', requireAuth, (req, res) => {
+app.get('/queue-status', requireAuth, async (req, res) => {
   try {
     const userId = req.session.user.id;
     const isDbAdmin = req.session.user.role === 'admin';
 
     const sql = isDbAdmin ? `
-      SELECT q.*, c.title AS channel_name, u.username 
-      FROM queue q 
-      LEFT JOIN channels c ON q.channel_id = c.id 
-      LEFT JOIN users u ON q.user_id = u.id
-      ORDER BY q.id ASC
+      SELECT s.*, c.channel_title AS channel_name, u.username 
+      FROM schedules s 
+      LEFT JOIN channels c ON s.channel_id = c.channel_id 
+      LEFT JOIN users u ON s.user_id = u.id
+      ORDER BY s.id ASC
     ` : `
-      SELECT q.*, c.title AS channel_name 
-      FROM queue q 
-      LEFT JOIN channels c ON q.channel_id = c.id 
-      WHERE q.user_id = ?
-      ORDER BY q.id ASC
+      SELECT s.*, c.channel_title AS channel_name 
+      FROM schedules s 
+      LEFT JOIN channels c ON s.channel_id = c.channel_id 
+      WHERE s.user_id = ?
+      ORDER BY s.id ASC
     `;
 
-    const rows = isDbAdmin ? db.prepare(sql).all() : db.prepare(sql).all(userId);
-    res.json(rows);
+    const result = isDbAdmin 
+      ? await db.execute(sql) 
+      : await db.execute({ sql, args: [userId] });
+
+    res.json(result.rows);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
 // Hapus Item Antrean Per-Baris
-app.delete('/queue/:id', requireAuth, (req, res) => {
+app.delete('/queue/:id', requireAuth, async (req, res) => {
   try {
     const { id } = req.params;
     const userId = req.session.user.id;
     const isAdmin = req.session.user.role === 'admin';
 
-    const item = db.prepare('SELECT * FROM queue WHERE id = ?').get(id);
+    const itemRes = await db.execute({
+      sql: 'SELECT * FROM schedules WHERE id = ?',
+      args: [id]
+    });
+    const item = itemRes.rows[0];
+
     if (!item) {
       return res.status(404).json({ error: 'Data tidak ditemukan' });
     }
@@ -266,7 +285,11 @@ app.delete('/queue/:id', requireAuth, (req, res) => {
       try { fs.unlinkSync(item.file_path); } catch (e) {}
     }
 
-    db.prepare('DELETE FROM queue WHERE id = ?').run(id);
+    await db.execute({
+      sql: 'DELETE FROM schedules WHERE id = ?',
+      args: [id]
+    });
+
     res.json({ success: true, message: 'Berhasil dihapus' });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -274,40 +297,44 @@ app.delete('/queue/:id', requireAuth, (req, res) => {
 });
 
 // Bersihkan Antrean Macet / Failed / Tanpa Channel
-app.delete('/clear-stuck-queue', requireAuth, (req, res) => {
+app.delete('/clear-stuck-queue', requireAuth, async (req, res) => {
   try {
     const userId = req.session.user.id;
     const isAdmin = req.session.user.role === 'admin';
 
     const sqlSelect = isAdmin ? `
-      SELECT file_path FROM queue 
+      SELECT file_path FROM schedules 
       WHERE status = 'Failed' OR status = 'Processing' OR channel_id IS NULL OR channel_id = ''
     ` : `
-      SELECT file_path FROM queue 
+      SELECT file_path FROM schedules 
       WHERE (status = 'Failed' OR status = 'Processing' OR channel_id IS NULL OR channel_id = '')
         AND user_id = ?
     `;
 
-    const stuckItems = isAdmin ? db.prepare(sqlSelect).all() : db.prepare(sqlSelect).all(userId);
+    const stuckItemsRes = isAdmin 
+      ? await db.execute(sqlSelect) 
+      : await db.execute({ sql: sqlSelect, args: [userId] });
 
-    stuckItems.forEach(item => {
+    stuckItemsRes.rows.forEach(item => {
       if (item.file_path && fs.existsSync(item.file_path)) {
         try { fs.unlinkSync(item.file_path); } catch (e) {}
       }
     });
 
     const sqlDelete = isAdmin ? `
-      DELETE FROM queue 
+      DELETE FROM schedules 
       WHERE status = 'Failed' OR status = 'Processing' OR channel_id IS NULL OR channel_id = ''
     ` : `
-      DELETE FROM queue 
+      DELETE FROM schedules 
       WHERE (status = 'Failed' OR status = 'Processing' OR channel_id IS NULL OR channel_id = '')
         AND user_id = ?
     `;
 
-    const result = isAdmin ? db.prepare(sqlDelete).run() : db.prepare(sqlDelete).run(userId);
+    const deleteRes = isAdmin 
+      ? await db.execute(sqlDelete) 
+      : await db.execute({ sql: sqlDelete, args: [userId] });
 
-    res.json({ success: true, message: `Berhasil membersihkan ${result.changes} data antrean.` });
+    res.json({ success: true, message: `Berhasil membersihkan ${deleteRes.rowsAffected} data antrean.` });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -316,20 +343,23 @@ app.delete('/clear-stuck-queue', requireAuth, (req, res) => {
 // --- ADMIN SPECIFIC ROUTES ---
 
 // Get Seluruh User untuk Admin
-app.get('/api/admin/users', requireAdmin, (req, res) => {
+app.get('/api/admin/users', requireAdmin, async (req, res) => {
   try {
-    const users = db.prepare('SELECT id, username, email, whatsapp, role, is_approved, created_at FROM users').all();
-    res.json(users);
+    const usersRes = await db.execute('SELECT id, username, email, whatsapp, role, is_approved, created_at FROM users');
+    res.json(usersRes.rows);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
 // Approve / Setujui Akun User
-app.post('/api/admin/approve/:id', requireAdmin, (req, res) => {
+app.post('/api/admin/approve/:id', requireAdmin, async (req, res) => {
   try {
     const { is_approved } = req.body; // 1 = Disetujui, 0 = Ditangguhkan
-    db.prepare('UPDATE users SET is_approved = ? WHERE id = ?').run(is_approved, req.params.id);
+    await db.execute({
+      sql: 'UPDATE users SET is_approved = ? WHERE id = ?',
+      args: [is_approved, req.params.id]
+    });
     res.json({ success: true, message: 'Status user berhasil diperbarui.' });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -337,21 +367,25 @@ app.post('/api/admin/approve/:id', requireAdmin, (req, res) => {
 });
 
 // Hapus User oleh Admin
-app.delete('/api/admin/users/:id', requireAdmin, (req, res) => {
+app.delete('/api/admin/users/:id', requireAdmin, async (req, res) => {
   try {
     const targetUserId = req.params.id;
 
     // Bersihkan file-file antrean milik user ini sebelum menghapus user
-    const userQueue = db.prepare('SELECT file_path FROM queue WHERE user_id = ?').all(targetUserId);
-    userQueue.forEach(q => {
+    const userQueueRes = await db.execute({
+      sql: 'SELECT file_path FROM schedules WHERE user_id = ?',
+      args: [targetUserId]
+    });
+
+    userQueueRes.rows.forEach(q => {
       if (q.file_path && fs.existsSync(q.file_path)) {
         try { fs.unlinkSync(q.file_path); } catch (e) {}
       }
     });
 
-    db.prepare('DELETE FROM queue WHERE user_id = ?').run(targetUserId);
-    db.prepare('DELETE FROM channels WHERE user_id = ?').run(targetUserId);
-    db.prepare('DELETE FROM users WHERE id = ?').run(targetUserId);
+    await db.execute({ sql: 'DELETE FROM schedules WHERE user_id = ?', args: [targetUserId] });
+    await db.execute({ sql: 'DELETE FROM channels WHERE user_id = ?', args: [targetUserId] });
+    await db.execute({ sql: 'DELETE FROM users WHERE id = ?', args: [targetUserId] });
 
     res.json({ success: true, message: 'User beserta datanya berhasil dihapus.' });
   } catch (err) {
