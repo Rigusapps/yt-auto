@@ -1,16 +1,21 @@
 require('dotenv').config();
 const { createClient } = require('@libsql/client');
 
-// Pastikan Environment Variable tersedia
-if (!process.env.TURSO_DATABASE_URL || !process.env.TURSO_AUTH_TOKEN) {
+// Sanitasi dan validasi variabel lingkungan
+const url = process.env.TURSO_DATABASE_URL ? process.env.TURSO_DATABASE_URL.trim() : null;
+const authToken = process.env.TURSO_AUTH_TOKEN ? process.env.TURSO_AUTH_TOKEN.trim() : null;
+
+if (!url || !authToken) {
   console.error('⚠️ WARN: TURSO_DATABASE_URL atau TURSO_AUTH_TOKEN belum terpasang di Environment Variables!');
 }
 
-// Inisialisasi Client Turso
-const turso = createClient({
-  url: process.env.TURSO_DATABASE_URL || 'file:scheduler.db',
-  authToken: process.env.TURSO_AUTH_TOKEN || undefined,
-});
+// Inisialisasi Client Turso Cloud
+const config = { url: url || 'file:scheduler.db' };
+if (authToken) {
+  config.authToken = authToken;
+}
+
+const turso = createClient(config);
 
 async function initDb() {
   try {
@@ -63,7 +68,7 @@ async function initDb() {
 
     console.log('✅ Database Turso Cloud berhasil diinisialisasi!');
   } catch (err) {
-    console.error('❌ Gagal inisialisasi database Turso:', err);
+    console.error('❌ Gagal inisialisasi database Turso:', err.message || err);
   }
 }
 
