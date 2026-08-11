@@ -1,7 +1,6 @@
 require('dotenv').config();
 const { createClient } = require('@libsql/client');
 
-// Sanitasi dan validasi variabel lingkungan
 const url = process.env.TURSO_DATABASE_URL ? process.env.TURSO_DATABASE_URL.trim() : null;
 const authToken = process.env.TURSO_AUTH_TOKEN ? process.env.TURSO_AUTH_TOKEN.trim() : null;
 
@@ -9,13 +8,10 @@ if (!url || !authToken) {
   console.error('⚠️ WARN: TURSO_DATABASE_URL atau TURSO_AUTH_TOKEN belum terpasang di Environment Variables!');
 }
 
-// Inisialisasi Client Turso Cloud
-const config = { url: url || 'file:scheduler.db' };
-if (authToken) {
-  config.authToken = authToken;
-}
-
-const turso = createClient(config);
+const turso = createClient({
+  url: url || 'file:scheduler.db',
+  authToken: authToken || undefined,
+});
 
 async function initDb() {
   try {
@@ -30,7 +26,7 @@ async function initDb() {
         role TEXT DEFAULT 'user',
         is_approved INTEGER DEFAULT 0,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-      )
+      );
     `);
 
     // 2. Tabel Channels
@@ -43,10 +39,10 @@ async function initDb() {
         refresh_token TEXT NOT NULL,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
-      )
+      );
     `);
 
-    // 3. Tabel Schedules / Video Queue
+    // 3. Tabel Schedules (Video Queue)
     await turso.execute(`
       CREATE TABLE IF NOT EXISTS schedules (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -63,16 +59,16 @@ async function initDb() {
         error_message TEXT,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
-      )
+      );
     `);
 
-    console.log('✅ Database Turso Cloud berhasil diinisialisasi!');
+    console.log('✅ Semua tabel (users, channels, schedules) berhasil dibuat di Turso Cloud!');
   } catch (err) {
-    console.error('❌ Gagal inisialisasi database Turso:', err.message || err);
+    console.error('❌ Gagal membuat tabel di Turso:', err.message || err);
   }
 }
 
-// Jalankan pembuatan tabel
+// Eksekusi inisialisasi tabel
 initDb();
 
 module.exports = turso;
