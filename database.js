@@ -67,5 +67,4 @@ async function initDb() {
 
 initDb();
 
-// EKSPOR LANGSUNG INSTANCE TURSO
 module.exports = turso;
