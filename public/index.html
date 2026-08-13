@@ -146,7 +146,6 @@
   </footer>
 
   <script>
-    // 1. Cek Sesi Pengguna & Hak Akses
     async function checkUserSession() {
       try {
         const res = await fetch('/api/me');
@@ -180,14 +179,12 @@
       }
     }
 
-    // 2. Logout Aplikasi
     window.logoutApp = async function() {
       if (!confirm('Apakah Anda yakin ingin logout dari aplikasi?')) return;
       await fetch('/api/logout', { method: 'POST' });
       window.location.href = '/login.html';
     };
 
-    // 3. Load Daftar Channel Terhubung
     async function loadChannels() {
       try {
         const res = await fetch('/channels');
@@ -218,7 +215,6 @@
       }
     }
 
-    // 4. Hapus Channel Terpilih
     window.deleteSelectedChannel = async function() {
       const listbox = document.getElementById('connectedChannelsListbox');
       const selectedChannelId = listbox.value;
@@ -246,7 +242,6 @@
       }
     };
 
-    // 5. Bersihkan Antrean Macet
     window.clearStuckQueue = async function() {
       if (!confirm('Apakah Anda yakin ingin menghapus semua antrean yang macet, gagal, atau tanpa channel?')) return;
 
@@ -264,7 +259,7 @@
       }
     };
 
-    // 6. Load Data Antrean Video (JAM SINKRON ADMIN/USER & SCHEDULER TETAP BERJALAN)
+    // --- LOAD ANTREAN VIDEO (PERBAIKAN FORMATTING PRESISI) ---
     async function loadQueue() {
       try {
         const res = await fetch('/queue-status');
@@ -295,7 +290,7 @@
 
           let actionBtn = `<button onclick="window.deleteQueue(${item.id})" class="bg-red-500 hover:bg-red-600 text-white text-xs px-3 py-1 rounded transition cursor-pointer font-medium">Hapus</button>`;
 
-          // --- FORMAT RENDERING TAMPILAN WAKTU SINKRON MEMAKAI WIB +07:00 EKSPLISIT ---
+          // RENDERING PRESISI: Membaca komponen jam secara langsung tanpa memicu konversi UTC ganda (+7)
           let displayDate = '-';
           if (item.scheduled_at) {
             const rawVal = String(item.scheduled_at).trim();
@@ -309,17 +304,14 @@
             }
 
             if (!isNaN(d.getTime())) {
-              // Format ke String WIB Lokal
-              displayDate = d.toLocaleString('id-ID', {
-                timeZone: 'Asia/Jakarta',
-                year: 'numeric',
-                month: 'numeric',
-                day: 'numeric',
-                hour: '2-digit',
-                minute: '2-digit',
-                second: '2-digit',
-                hour12: false
-              });
+              const day = String(d.getDate()).padStart(2, '0');
+              const month = String(d.getMonth() + 1).padStart(2, '0');
+              const year = d.getFullYear();
+              const hours = String(d.getHours()).padStart(2, '0');
+              const minutes = String(d.getMinutes()).padStart(2, '0');
+              const seconds = String(d.getSeconds()).padStart(2, '0');
+
+              displayDate = `${day}/${month}/${year}, ${hours}.${minutes}.${seconds}`;
             }
           }
 
@@ -341,7 +333,6 @@
       }
     }
 
-    // 7. Hapus Item Antrean (Per-baris)
     window.deleteQueue = async function(id) {
       if (!confirm('Apakah Anda yakin ingin menghapus item ini?')) return;
 
@@ -358,7 +349,7 @@
       }
     };
 
-    // 8. Submit Form Event (MENGIRIM MILIDETIK LOKAL PC PRESISI UTK SCHEDULER BACKEND)
+    // --- FORM SUBMIT (MENGIRIM TIMESTAMP LOKAL ASLI) ---
     document.getElementById('uploadForm').addEventListener('submit', function (e) {
       e.preventDefault();
       
@@ -366,9 +357,9 @@
       const originalBtnText = submitBtn.innerHTML;
       const formData = new FormData(e.target);
 
-      // Simpan input sebagai Timestamp Lokal PC murni
       const scheduledAtInput = e.target.querySelector('input[name="scheduled_at"]').value;
       if (scheduledAtInput) {
+        // Menggunakan Date lokal biasa agar waktu eksekusi scheduler di server persis sesuai jadwal yang diisikan
         const localTimestamp = new Date(scheduledAtInput).getTime();
         formData.set('scheduled_at', localTimestamp);
       }
@@ -412,7 +403,6 @@
       xhr.send(formData);
     });
 
-    // Jalankan saat pertama kali halaman dimuat
     checkUserSession();
     loadChannels();
     loadQueue();
