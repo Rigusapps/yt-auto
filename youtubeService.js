@@ -2,7 +2,8 @@
 const { youtube } = require('@googleapis/youtube');
 const { OAuth2Client } = require('google-auth-library');
 const fs = require('fs');
-const db = require('./database');
+// 1. Destructure turso directly from database.js
+const { turso } = require('./database');
 require('dotenv').config();
 
 // Inisialisasi OAuth2 Client
@@ -24,7 +25,7 @@ function getAuthUrl() {
   });
 }
 
-// 2. Fungsi untuk menyimpan data channel, token, dan user_id pemilik ke database
+// 2. Fungsi untuk menyimpan data channel, token, dan user_id pemilik ke database Turso
 async function handleCallback(code, userId) {
   if (!userId) {
     throw new Error('User ID tidak ditemukan. Anda harus login terlebih dahulu.');
@@ -50,30 +51,37 @@ async function handleCallback(code, userId) {
   const avatarUrl = channel.snippet.thumbnails.default.url;
   const refreshToken = tokens.refresh_token;
 
-  // Simpan atau update channel di tabel `channels` beserta `user_id` pemiliknya
-  const stmt = db.prepare(`
-    INSERT INTO channels (id, title, avatar_url, refresh_token, user_id)
-    VALUES (?, ?, ?, ?, ?)
-    ON CONFLICT(id) DO UPDATE SET
-      title = excluded.title,
-      avatar_url = excluded.avatar_url,
-      refresh_token = COALESCE(excluded.refresh_token, channels.refresh_token),
-      user_id = excluded.user_id
-  `);
-
-  stmt.run(channelId, title, avatarUrl, refreshToken, userId);
+  // PERBAIKAN: Gunakan turso.execute dengan await
+  await turso.execute({
+    sql: `
+      INSERT INTO channels (id, title, avatar_url, refresh_token, user_id)
+      VALUES (?, ?, ?, ?, ?)
+      ON CONFLICT(id) DO UPDATE SET
+        title = excluded.title,
+        avatar_url = excluded.avatar_url,
+        refresh_token = COALESCE(excluded.refresh_token, channels.refresh_token),
+        user_id = excluded.user_id
+    `,
+    args: [channelId, title, avatarUrl, refreshToken || null, userId]
+  });
 
   return { id: channelId, title, avatarUrl };
 }
 
-// 3. Fungsi untuk menyiapkan Client YouTube khusus berdasarkan channel_id
-function getAuthenticatedClient(channelId) {
+// 3. Fungsi untuk menyiapkan Client YouTube khusus berdasarkan channel_id (Dibuat ASYNC)
+async function getAuthenticatedClient(channelId) {
   if (!channelId) {
     throw new Error('Channel ID tidak ditentukan!');
   }
 
-  const channel = db.prepare('SELECT refresh_token FROM channels WHERE id = ?').get(channelId);
-  
+  // PERBAIKAN: Gunakan turso.execute secara async
+  const result = await turso.execute({
+    sql: 'SELECT refresh_token FROM channels WHERE id = ?',
+    args: [channelId]
+  });
+
+  const channel = result.rows[0];
+
   if (!channel || !channel.refresh_token) {
     throw new Error(`Refresh token untuk Channel ID ${channelId} tidak ditemukan. Silakan login ulang channel ini.`);
   }
@@ -93,8 +101,8 @@ function getAuthenticatedClient(channelId) {
 
 // 4. Fungsi utama untuk upload video ke YouTube berdasarkan channel_id
 async function uploadVideoToYouTube(videoData) {
-  // Ambil client YouTube khusus milik channel yang dijadwalkan
-  const yt = getAuthenticatedClient(videoData.channel_id);
+  // PERBAIKAN: Tambahkan await karena getAuthenticatedClient sekarang async
+  const yt = await getAuthenticatedClient(videoData.channel_id);
 
   const response = await yt.videos.insert({
     part: ['snippet', 'status'],
