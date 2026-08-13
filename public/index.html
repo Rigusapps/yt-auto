@@ -264,7 +264,7 @@
       }
     };
 
-    // 6. Load Data Antrean Video (DENGAN DUAL-PARSING ANTI UTC BUG DI ADMIN/USER)
+    // 6. Load Data Antrean Video (SINKRON 100% DI ADMIN & USER)
     async function loadQueue() {
       try {
         const res = await fetch('/queue-status');
@@ -295,32 +295,29 @@
 
           let actionBtn = `<button onclick="window.deleteQueue(${item.id})" class="bg-red-500 hover:bg-red-600 text-white text-xs px-3 py-1 rounded transition cursor-pointer font-medium">Hapus</button>`;
 
-          // --- RENDERING TAMPILAN JAM PRESISI (BEBAS BUG UTC LEFT JOIN ADMIN) ---
+          // --- FORMAT WAKTU PERSISI TEKS TANPA PENAMBAHAN ZONA WAKTU AUTOMATIS ---
           let displayDate = '-';
           if (item.scheduled_at) {
             const rawVal = String(item.scheduled_at).trim();
-            let dateObj;
+            let d;
 
             if (!isNaN(Number(rawVal))) {
-              // Jika bertipe angka timestamp murni
-              dateObj = new Date(Number(rawVal));
+              d = new Date(Number(rawVal));
             } else {
-              // Jika dikembalikan sebagai String ISO UTC oleh LEFT JOIN Query Admin
-              // Hapus akhiran 'Z' dan '+00:00' agar tidak dikonversi ganda (+7 jam) oleh browser
-              const cleanIso = rawVal.replace('Z', '').replace('+00:00', '');
-              dateObj = new Date(cleanIso);
+              const cleanStr = rawVal.replace('Z', '').replace('+00:00', '');
+              d = new Date(cleanStr);
             }
 
-            if (!isNaN(dateObj.getTime())) {
-              displayDate = dateObj.toLocaleString('id-ID', {
-                year: 'numeric',
-                month: 'numeric',
-                day: 'numeric',
-                hour: '2-digit',
-                minute: '2-digit',
-                second: '2-digit',
-                hour12: false
-              });
+            if (!isNaN(d.getTime())) {
+              // Ambil komponen jam lokal langsung tanpa terpengaruh conversion offset browser
+              const day = String(d.getUTCDate()).padStart(2, '0');
+              const month = String(d.getUTCMonth() + 1).padStart(2, '0');
+              const year = d.getUTCFullYear();
+              const hours = String(d.getUTCHours()).padStart(2, '0');
+              const minutes = String(d.getUTCMinutes()).padStart(2, '0');
+              const seconds = String(d.getUTCSeconds()).padStart(2, '0');
+
+              displayDate = `${day}/${month}/${year}, ${hours}.${minutes}.${seconds}`;
             }
           }
 
@@ -359,7 +356,7 @@
       }
     };
 
-    // 8. Submit Form Event (KONVERSI WAKTU LOKAL SECARA PRESISI TANPA UTC BUG)
+    // 8. Submit Form Event
     document.getElementById('uploadForm').addEventListener('submit', function (e) {
       e.preventDefault();
       
@@ -367,7 +364,7 @@
       const originalBtnText = submitBtn.innerHTML;
       const formData = new FormData(e.target);
 
-      // Parsing String datetime-local ("YYYY-MM-DDTHH:mm") langsung ke Waktu Lokal PC
+      // Simpan input sebagai UTC Milliseconds Murni
       const scheduledAtInput = e.target.querySelector('input[name="scheduled_at"]').value;
       if (scheduledAtInput) {
         const parts = scheduledAtInput.split('T');
@@ -376,20 +373,19 @@
           const timeParts = parts[1].split(':');
           
           const year = parseInt(dateParts[0], 10);
-          const month = parseInt(dateParts[1], 10) - 1; // Month 0-indexed
+          const month = parseInt(dateParts[1], 10) - 1;
           const day = parseInt(dateParts[2], 10);
           const hour = parseInt(timeParts[0], 10);
           const minute = parseInt(timeParts[1], 10);
 
-          // Buat Objek Date Murni berdasarkan Komponen Lokal
-          const exactLocalTimestamp = new Date(year, month, day, hour, minute, 0).getTime();
-          formData.set('scheduled_at', exactLocalTimestamp);
+          // Gunakan Date.UTC agar nilai waktu tersimpan utuh sesuai yang diisi pada form
+          const utcTimestamp = Date.UTC(year, month, day, hour, minute, 0);
+          formData.set('scheduled_at', utcTimestamp);
         }
       }
 
       submitBtn.disabled = true;
 
-      // Gunakan XMLHttpRequest untuk membaca progres persentase upload secara real-time
       const xhr = new XMLHttpRequest();
       xhr.open('POST', '/api/schedule', true);
 
