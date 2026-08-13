@@ -146,7 +146,7 @@
   </footer>
 
   <script>
-    // 1. Cek Sesi Pengguna & Hak Akses (Aman dari Parsing JSON HTML)
+    // 1. Cek Sesi Pengguna & Hak Akses
     async function checkUserSession() {
       try {
         const res = await fetch('/api/me');
@@ -348,47 +348,62 @@
       }
     };
 
-    // 8. Submit Form Event (Dengn Presisi Timestamp & Lock Button)
-    document.getElementById('uploadForm').addEventListener('submit', async (e) => {
+    // 8. Submit Form Event (DENGAN INDIKATOR PERSENTASE PROGRESS UPLOAD REAL-TIME)
+    document.getElementById('uploadForm').addEventListener('submit', function (e) {
       e.preventDefault();
       
       const submitBtn = e.target.querySelector('button[type="submit"]');
       const originalBtnText = submitBtn.innerHTML;
+      const formData = new FormData(e.target);
 
-      try {
-        submitBtn.disabled = true;
-        submitBtn.innerHTML = `⏳ Mengunggah berkas ke server...`;
+      // Konversi waktu input browser ke UNIX Timestamp milidetik lokal
+      const scheduledAtInput = e.target.querySelector('input[name="scheduled_at"]').value;
+      if (scheduledAtInput) {
+        const localTimestamp = new Date(scheduledAtInput).getTime();
+        formData.set('scheduled_at', localTimestamp);
+      }
 
-        const formData = new FormData(e.target);
+      submitBtn.disabled = true;
 
-        // Konversi waktu input browser ke UNIX Timestamp milidetik
-        const scheduledAtInput = e.target.querySelector('input[name="scheduled_at"]').value;
-        if (scheduledAtInput) {
-          const localTimestamp = new Date(scheduledAtInput).getTime();
-          formData.set('scheduled_at', localTimestamp);
+      // Gunakan XMLHttpRequest untuk membaca progres persentase upload secara real-time
+      const xhr = new XMLHttpRequest();
+      xhr.open('POST', '/api/schedule', true);
+
+      // Listener Progres Unggah (0% - 100%)
+      xhr.upload.onprogress = function(event) {
+        if (event.lengthComputable) {
+          const percentComplete = Math.round((event.loaded / event.total) * 100);
+          submitBtn.innerHTML = `⏳ Mengunggah berkas ke server (${percentComplete}%)...`;
         }
+      };
 
-        const res = await fetch('/api/schedule', {
-          method: 'POST',
-          body: formData
-        });
-
-        const data = await res.json();
-
-        if (res.ok) {
-          alert('✅ Video berhasil dijadwalkan!');
-          e.target.reset();
-          await loadQueue();
-        } else {
-          alert('❌ Gagal: ' + (data.error || 'Terjadi kesalahan pada server'));
-        }
-      } catch (err) {
-        console.error('Error submit form:', err);
-        alert('❌ Terjadi kesalahan jaringan atau ukuran file terlalu besar: ' + err.message);
-      } finally {
+      // Handler Respons dari Server
+      xhr.onload = function() {
         submitBtn.disabled = false;
         submitBtn.innerHTML = originalBtnText;
-      }
+
+        if (xhr.status === 200) {
+          alert('✅ Video berhasil dijadwalkan!');
+          e.target.reset();
+          loadQueue();
+        } else {
+          let errMessage = 'Terjadi kesalahan pada server';
+          try {
+            const errData = JSON.parse(xhr.responseText);
+            errMessage = errData.error || errMessage;
+          } catch(err) {}
+          alert('❌ Gagal: ' + errMessage);
+        }
+      };
+
+      // Handler Kesalahan Jaringan
+      xhr.onerror = function() {
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = originalBtnText;
+        alert('❌ Terjadi kesalahan jaringan saat mengunggah berkas.');
+      };
+
+      xhr.send(formData);
     });
 
     // Jalankan saat pertama kali halaman dimuat
