@@ -337,7 +337,7 @@
       }
     };
 
-    // Submit Form Event (DIPERBAIKI DENGAN LOADING STATE & ENDPOINT '/api/schedule')
+    // Submit Form Event (DIPERBAIKI UNTUK PRESISI TIMEZONE & UPLOAD PROGRESS)
     document.getElementById('uploadForm').addEventListener('submit', async (e) => {
       e.preventDefault();
       
@@ -350,10 +350,36 @@
 
         const formData = new FormData(e.target);
 
+        // --- KONVERSI WAKTU EKSPLISIT DARI BROWSER KE UNIX TIMESTAMP MILIDETIK ---
+        const scheduledAtInput = e.target.querySelector('input[name="scheduled_at"]').value;
+        if (scheduledAtInput) {
+          // new Date(scheduledAtInput).getTime() membaca jam persis sesuai Waktu PC / Laptop User
+          const localTimestamp = new Date(scheduledAtInput).getTime();
+          formData.set('scheduled_at', localTimestamp);
+        }
+
         const res = await fetch('/api/schedule', {
           method: 'POST',
           body: formData
         });
+
+        const data = await res.json();
+
+        if (res.ok) {
+          alert('✅ Video berhasil dijadwalkan!');
+          e.target.reset();
+          await loadQueue();
+        } else {
+          alert('❌ Gagal: ' + (data.error || 'Terjadi kesalahan pada server'));
+        }
+      } catch (err) {
+        console.error('Error submit form:', err);
+        alert('❌ Terjadi kesalahan jaringan atau ukuran file terlalu besar: ' + err.message);
+      } finally {
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = originalBtnText;
+      }
+    });
 
         const data = await res.json();
 
