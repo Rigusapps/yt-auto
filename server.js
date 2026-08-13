@@ -227,7 +227,7 @@ const scheduleHandler = async (req, res) => {
       return res.status(400).json({ error: 'Pilih channel tujuan unggah!' });
     }
 
-    // SIMPAN TIMESTAMP LOKAL SECARA PRESISI
+    // SIMPAN TIMESTAMP MURNI TANPA SHIFT TIMEZONE
     let timestamp = Number(scheduled_at);
     if (isNaN(timestamp) || timestamp <= 0) {
       timestamp = new Date(scheduled_at).getTime();
@@ -253,13 +253,12 @@ const scheduleHandler = async (req, res) => {
 app.post('/api/schedule', requireAuth, handleFileUpload, scheduleHandler);
 app.post('/schedule', requireAuth, handleFileUpload, scheduleHandler);
 
-// Get List Antrean Video (SOLUSI DENGAN PENYELARASAN DUA WAKTU)
+// Get List Antrean Video - SINKRON LENGKAP BANTUAN DATA USER & CHANNEL
 app.get('/queue-status', requireAuth, async (req, res) => {
   try {
     const userId = req.session.user.id;
     const isDbAdmin = req.session.user.role === 'admin';
 
-    // Query antrean murni
     const queueSql = isDbAdmin
       ? `SELECT * FROM queue ORDER BY id ASC`
       : `SELECT * FROM queue WHERE user_id = ? ORDER BY id ASC`;
@@ -268,7 +267,6 @@ app.get('/queue-status', requireAuth, async (req, res) => {
       ? await turso.execute(queueSql) 
       : await turso.execute({ sql: queueSql, args: [userId] });
 
-    // Ambil data channel dan users
     const channelsRes = await turso.execute(`SELECT id, title FROM channels`);
     const usersRes = await turso.execute(`SELECT id, username FROM users`);
 
@@ -282,8 +280,9 @@ app.get('/queue-status', requireAuth, async (req, res) => {
       let rawVal = item.scheduled_at;
       let finalNum = Number(rawVal);
 
+      // JIKA DB MENGEMBALIKAN STRING ISO (BERAKHIRAN Z / OFFSET), RAPIKAN KEMBALI
       if (isNaN(finalNum) && typeof rawVal === 'string') {
-        const cleanIso = rawVal.replace('Z', '').replace('+00:00', '');
+        const cleanIso = rawVal.replace('Z', '').replace(/\+\d{2}:\d{2}$/, '');
         finalNum = new Date(cleanIso).getTime();
       }
 
