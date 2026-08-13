@@ -1,23 +1,18 @@
-// database.js
 require('dotenv').config();
 const { createClient } = require('@libsql/client');
 
-// Memastikan format URL Turso menggunakan skema https:// agar berjalan lancar di Render
 let dbUrl = process.env.TURSO_DATABASE_URL || '';
 if (dbUrl.startsWith('libsql://')) {
   dbUrl = dbUrl.replace('libsql://', 'https://');
 }
 
-// Inisialisasi Client Turso Cloud Database
 const turso = createClient({
   url: dbUrl,
   authToken: process.env.TURSO_AUTH_TOKEN,
 });
 
-// Fungsi Inisialisasi & Migrasi Tabel di Turso
 async function initDb() {
   try {
-    // 1. Tabel Users (Mengandung email, whatsapp, & status persetujuan is_approved)
     await turso.execute(`
       CREATE TABLE IF NOT EXISTS users (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -31,7 +26,6 @@ async function initDb() {
       )
     `);
 
-    // 2. Tabel Channels
     await turso.execute(`
       CREATE TABLE IF NOT EXISTS channels (
         id TEXT PRIMARY KEY,
@@ -43,7 +37,6 @@ async function initDb() {
       )
     `);
 
-    // 3. Tabel Queue
     await turso.execute(`
       CREATE TABLE IF NOT EXISTS queue (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -62,7 +55,6 @@ async function initDb() {
       )
     `);
 
-    // Migrasi Otomatis jika tabel lama di Turso belum memiliki kolom baru
     try {
       const uInfo = await turso.execute("PRAGMA table_info(users)");
       const uCols = uInfo.rows.map(c => c.name);
@@ -89,4 +81,5 @@ async function initDb() {
   }
 }
 
-module.exports = { turso, initDb };
+// Export turso dan alias db
+module.exports = { turso, db: turso, initDb };
