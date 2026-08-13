@@ -259,7 +259,7 @@
       }
     };
 
-    // --- LOAD ANTREAN VIDEO (FORMATTING MURNI TANPA TERPENGARUH UTC SHIFT) ---
+    // --- LOAD ANTREAN VIDEO (SANGAT SEDERHANA, MENAMPILKAN TEKS JADI DARI BACKEND) ---
     async function loadQueue() {
       try {
         const res = await fetch('/queue-status');
@@ -290,31 +290,8 @@
 
           let actionBtn = `<button onclick="window.deleteQueue(${item.id})" class="bg-red-500 hover:bg-red-600 text-white text-xs px-3 py-1 rounded transition cursor-pointer font-medium">Hapus</button>`;
 
-          // RENDERING PRESISI: PARSING STRING LANGSUNG TANPA KONVERSI OBJECT DATE
-          let displayDate = '-';
-          if (item.scheduled_at) {
-            const raw = String(item.scheduled_at).trim();
-            let d;
-
-            if (!isNaN(Number(raw))) {
-              d = new Date(Number(raw));
-            } else {
-              const cleanStr = raw.replace('Z', '').replace(/\+\d{2}:\d{2}$/, '');
-              d = new Date(cleanStr);
-            }
-
-            if (!isNaN(d.getTime())) {
-              // Ambil komponen tanggal & waktu persis sesuai yang tersimpan
-              const day = String(d.getDate()).padStart(2, '0');
-              const month = String(d.getMonth() + 1).padStart(2, '0');
-              const year = d.getFullYear();
-              const hours = String(d.getHours()).padStart(2, '0');
-              const minutes = String(d.getMinutes()).padStart(2, '0');
-              const seconds = String(d.getSeconds()).padStart(2, '0');
-
-              displayDate = `${day}/${month}/${year}, ${hours}.${minutes}.${seconds}`;
-            }
-          }
+          // LANGSUNG GUNAKAN TEKS WAKTU YANG SUDAH DUMP DARI BACKEND
+          const displayDate = item.display_date || '-';
 
           tbody.innerHTML += `
             <tr class="border-b">
@@ -350,33 +327,13 @@
       }
     };
 
-    // --- FORM SUBMIT (KIRIM TIMESTAMP LOKAL ASLI SAMA DENGAN FORM INPUT) ---
+    // --- FORM SUBMIT ---
     document.getElementById('uploadForm').addEventListener('submit', function (e) {
       e.preventDefault();
       
       const submitBtn = e.target.querySelector('button[type="submit"]');
       const originalBtnText = submitBtn.innerHTML;
       const formData = new FormData(e.target);
-
-      const scheduledAtInput = e.target.querySelector('input[name="scheduled_at"]').value;
-      if (scheduledAtInput) {
-        // Ambil komponen tanggal & jam dari input
-        const parts = scheduledAtInput.split('T');
-        if (parts.length === 2) {
-          const dateParts = parts[0].split('-');
-          const timeParts = parts[1].split(':');
-          
-          const year = parseInt(dateParts[0], 10);
-          const month = parseInt(dateParts[1], 10) - 1;
-          const day = parseInt(dateParts[2], 10);
-          const hour = parseInt(timeParts[0], 10);
-          const minute = parseInt(timeParts[1], 10);
-
-          // Timestamp lokal murni
-          const localTimestamp = new Date(year, month, day, hour, minute, 0).getTime();
-          formData.set('scheduled_at', localTimestamp);
-        }
-      }
 
       submitBtn.disabled = true;
 
