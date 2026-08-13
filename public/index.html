@@ -259,7 +259,7 @@
       }
     };
 
-    // --- LOAD ANTREAN VIDEO (PERBAIKAN FORMATTING PRESISI) ---
+    // --- LOAD ANTREAN VIDEO (PERBAIKAN FORMATTING KONSISTEN MURNI) ---
     async function loadQueue() {
       try {
         const res = await fetch('/queue-status');
@@ -290,20 +290,12 @@
 
           let actionBtn = `<button onclick="window.deleteQueue(${item.id})" class="bg-red-500 hover:bg-red-600 text-white text-xs px-3 py-1 rounded transition cursor-pointer font-medium">Hapus</button>`;
 
-          // RENDERING PRESISI: Membaca komponen jam secara langsung tanpa memicu konversi UTC ganda (+7)
+          // RENDERING PERSISI SAMA ANTARA USER DAN ADMIN
           let displayDate = '-';
           if (item.scheduled_at) {
-            const rawVal = String(item.scheduled_at).trim();
-            let d;
-
-            if (!isNaN(Number(rawVal))) {
-              d = new Date(Number(rawVal));
-            } else {
-              const cleanStr = rawVal.replace('Z', '').replace('+00:00', '');
-              d = new Date(cleanStr);
-            }
-
-            if (!isNaN(d.getTime())) {
+            const ts = Number(item.scheduled_at);
+            if (!isNaN(ts)) {
+              const d = new Date(ts);
               const day = String(d.getDate()).padStart(2, '0');
               const month = String(d.getMonth() + 1).padStart(2, '0');
               const year = d.getFullYear();
@@ -349,7 +341,7 @@
       }
     };
 
-    // --- FORM SUBMIT (MENGIRIM TIMESTAMP LOKAL ASLI) ---
+    // FORM SUBMIT (MENGIRIM TIMESTAMP LOKAL MURNI)
     document.getElementById('uploadForm').addEventListener('submit', function (e) {
       e.preventDefault();
       
@@ -359,9 +351,21 @@
 
       const scheduledAtInput = e.target.querySelector('input[name="scheduled_at"]').value;
       if (scheduledAtInput) {
-        // Menggunakan Date lokal biasa agar waktu eksekusi scheduler di server persis sesuai jadwal yang diisikan
-        const localTimestamp = new Date(scheduledAtInput).getTime();
-        formData.set('scheduled_at', localTimestamp);
+        // Konversi persisi "YYYY-MM-DDTHH:mm" ke Timestamp Lokal
+        const parts = scheduledAtInput.split('T');
+        if (parts.length === 2) {
+          const dateParts = parts[0].split('-');
+          const timeParts = parts[1].split(':');
+          
+          const year = parseInt(dateParts[0], 10);
+          const month = parseInt(dateParts[1], 10) - 1;
+          const day = parseInt(dateParts[2], 10);
+          const hour = parseInt(timeParts[0], 10);
+          const minute = parseInt(timeParts[1], 10);
+
+          const localTimestamp = new Date(year, month, day, hour, minute, 0).getTime();
+          formData.set('scheduled_at', localTimestamp);
+        }
       }
 
       submitBtn.disabled = true;
