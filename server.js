@@ -227,23 +227,15 @@ const scheduleHandler = async (req, res) => {
       return res.status(400).json({ error: 'Pilih channel tujuan unggah!' });
     }
 
-    // --- PERBAIKAN TIMESTAMPS & EKSPLISIT ZONA WAKTU WIB (+07:00) ---
+    // --- PARSING ANKGA TIMESTAMP MILIDETIK MURNI ---
     let timestamp;
     if (!isNaN(Number(scheduled_at))) {
-      // Jika sudah dikirim sebagai UNIX Timestamp milidetik dari frontend
       timestamp = Number(scheduled_at);
     } else {
-      // Jika dikirim sebagai string datetime-local "YYYY-MM-DDTHH:mm"
-      const rawString = String(scheduled_at).trim();
-      const formattedInput = rawString.length === 16 ? `${rawString}:00` : rawString;
-      const hasOffset = formattedInput.includes('Z') || formattedInput.includes('+') || (formattedInput.includes('-') && formattedInput.length > 19);
-      
-      // Paksa tambahkan offset WIB (+07:00) jika belum ada timezone offset
-      const finalDateString = hasOffset ? formattedInput : `${formattedInput}+07:00`;
-      timestamp = new Date(finalDateString).getTime();
+      timestamp = new Date(scheduled_at).getTime();
     }
 
-    if (isNaN(timestamp)) {
+    if (isNaN(timestamp) || timestamp <= 0) {
       return res.status(400).json({ error: 'Format tanggal/waktu tidak valid!' });
     }
 
@@ -410,7 +402,6 @@ app.delete('/api/admin/users/:id', requireAdmin, async (req, res) => {
 
 // --- WORKER & SERVER INIT ---
 
-// Pastikan Inisialisasi Database selesai sebelum server dan cron job dijalankan
 initDb().then(() => {
   initScheduler();
   app.listen(PORT, () => {
