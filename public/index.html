@@ -264,7 +264,7 @@
       }
     };
 
-    // 6. Load Data Antrean Video (SINKRON 100% DI ADMIN & USER)
+    // 6. Load Data Antrean Video (JAM SINKRON ADMIN/USER & SCHEDULER TETAP BERJALAN)
     async function loadQueue() {
       try {
         const res = await fetch('/queue-status');
@@ -295,7 +295,7 @@
 
           let actionBtn = `<button onclick="window.deleteQueue(${item.id})" class="bg-red-500 hover:bg-red-600 text-white text-xs px-3 py-1 rounded transition cursor-pointer font-medium">Hapus</button>`;
 
-          // --- FORMAT WAKTU PERSISI TEKS TANPA PENAMBAHAN ZONA WAKTU AUTOMATIS ---
+          // --- FORMAT RENDERING TAMPILAN WAKTU SINKRON MEMAKAI WIB +07:00 EKSPLISIT ---
           let displayDate = '-';
           if (item.scheduled_at) {
             const rawVal = String(item.scheduled_at).trim();
@@ -309,15 +309,17 @@
             }
 
             if (!isNaN(d.getTime())) {
-              // Ambil komponen jam lokal langsung tanpa terpengaruh conversion offset browser
-              const day = String(d.getUTCDate()).padStart(2, '0');
-              const month = String(d.getUTCMonth() + 1).padStart(2, '0');
-              const year = d.getUTCFullYear();
-              const hours = String(d.getUTCHours()).padStart(2, '0');
-              const minutes = String(d.getUTCMinutes()).padStart(2, '0');
-              const seconds = String(d.getUTCSeconds()).padStart(2, '0');
-
-              displayDate = `${day}/${month}/${year}, ${hours}.${minutes}.${seconds}`;
+              // Format ke String WIB Lokal
+              displayDate = d.toLocaleString('id-ID', {
+                timeZone: 'Asia/Jakarta',
+                year: 'numeric',
+                month: 'numeric',
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit',
+                hour12: false
+              });
             }
           }
 
@@ -356,7 +358,7 @@
       }
     };
 
-    // 8. Submit Form Event
+    // 8. Submit Form Event (MENGIRIM MILIDETIK LOKAL PC PRESISI UTK SCHEDULER BACKEND)
     document.getElementById('uploadForm').addEventListener('submit', function (e) {
       e.preventDefault();
       
@@ -364,24 +366,11 @@
       const originalBtnText = submitBtn.innerHTML;
       const formData = new FormData(e.target);
 
-      // Simpan input sebagai UTC Milliseconds Murni
+      // Simpan input sebagai Timestamp Lokal PC murni
       const scheduledAtInput = e.target.querySelector('input[name="scheduled_at"]').value;
       if (scheduledAtInput) {
-        const parts = scheduledAtInput.split('T');
-        if (parts.length === 2) {
-          const dateParts = parts[0].split('-');
-          const timeParts = parts[1].split(':');
-          
-          const year = parseInt(dateParts[0], 10);
-          const month = parseInt(dateParts[1], 10) - 1;
-          const day = parseInt(dateParts[2], 10);
-          const hour = parseInt(timeParts[0], 10);
-          const minute = parseInt(timeParts[1], 10);
-
-          // Gunakan Date.UTC agar nilai waktu tersimpan utuh sesuai yang diisi pada form
-          const utcTimestamp = Date.UTC(year, month, day, hour, minute, 0);
-          formData.set('scheduled_at', utcTimestamp);
-        }
+        const localTimestamp = new Date(scheduledAtInput).getTime();
+        formData.set('scheduled_at', localTimestamp);
       }
 
       submitBtn.disabled = true;
