@@ -259,7 +259,7 @@
       }
     };
 
-    // --- LOAD ANTREAN VIDEO (PERBAIKAN TAMPILAN WAKTU) ---
+    // --- LOAD ANTREAN VIDEO (FORMATTING MURNI TANPA TERPENGARUH UTC SHIFT) ---
     async function loadQueue() {
       try {
         const res = await fetch('/queue-status');
@@ -290,12 +290,21 @@
 
           let actionBtn = `<button onclick="window.deleteQueue(${item.id})" class="bg-red-500 hover:bg-red-600 text-white text-xs px-3 py-1 rounded transition cursor-pointer font-medium">Hapus</button>`;
 
-          // RENDERING PRESISI SINKRON DENGAN DOKUMEN INPUT LOKAL
+          // RENDERING PRESISI: PARSING STRING LANGSUNG TANPA KONVERSI OBJECT DATE
           let displayDate = '-';
           if (item.scheduled_at) {
-            const ts = Number(item.scheduled_at);
-            if (!isNaN(ts)) {
-              const d = new Date(ts);
+            const raw = String(item.scheduled_at).trim();
+            let d;
+
+            if (!isNaN(Number(raw))) {
+              d = new Date(Number(raw));
+            } else {
+              const cleanStr = raw.replace('Z', '').replace(/\+\d{2}:\d{2}$/, '');
+              d = new Date(cleanStr);
+            }
+
+            if (!isNaN(d.getTime())) {
+              // Ambil komponen tanggal & waktu persis sesuai yang tersimpan
               const day = String(d.getDate()).padStart(2, '0');
               const month = String(d.getMonth() + 1).padStart(2, '0');
               const year = d.getFullYear();
@@ -341,7 +350,7 @@
       }
     };
 
-    // --- FORM SUBMIT (PERBAIKAN INPUT MURNI TANPA SHIFT SHIFT TIMEZONE) ---
+    // --- FORM SUBMIT (KIRIM TIMESTAMP LOKAL ASLI SAMA DENGAN FORM INPUT) ---
     document.getElementById('uploadForm').addEventListener('submit', function (e) {
       e.preventDefault();
       
@@ -351,7 +360,7 @@
 
       const scheduledAtInput = e.target.querySelector('input[name="scheduled_at"]').value;
       if (scheduledAtInput) {
-        // Parsing string 'YYYY-MM-DDTHH:mm' menjadi komponen absolut
+        // Ambil komponen tanggal & jam dari input
         const parts = scheduledAtInput.split('T');
         if (parts.length === 2) {
           const dateParts = parts[0].split('-');
@@ -363,6 +372,7 @@
           const hour = parseInt(timeParts[0], 10);
           const minute = parseInt(timeParts[1], 10);
 
+          // Timestamp lokal murni
           const localTimestamp = new Date(year, month, day, hour, minute, 0).getTime();
           formData.set('scheduled_at', localTimestamp);
         }
