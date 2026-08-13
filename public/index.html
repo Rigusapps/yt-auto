@@ -264,7 +264,7 @@
       }
     };
 
-    // 6. Load Data Antrean Video
+    // 6. Load Data Antrean Video (DENGAN PENANGANAN ZONA WAKTU ASIA/JAKARTA)
     async function loadQueue() {
       try {
         const res = await fetch('/queue-status');
@@ -295,27 +295,33 @@
 
           let actionBtn = `<button onclick="window.deleteQueue(${item.id})" class="bg-red-500 hover:bg-red-600 text-white text-xs px-3 py-1 rounded transition cursor-pointer font-medium">Hapus</button>`;
 
-         let displayDate = '-';
-if (item.scheduled_at) {
-  // Pastikan scheduled_at diubah ke tipe Number jika berupa string angka
-  const numTimestamp = Number(item.scheduled_at);
-  
-  const dateObj = !isNaN(numTimestamp) 
-    ? new Date(numTimestamp) 
-    : new Date(item.scheduled_at);
+          // --- PENANGANAN PARSING WAKTU SUPAYA SAMA DI ADMIN MAUPUN USER ---
+          let displayDate = '-';
+          if (item.scheduled_at) {
+            const rawVal = String(item.scheduled_at);
+            let dateObj;
 
-  if (!isNaN(dateObj.getTime())) {
-    displayDate = dateObj.toLocaleString('id-ID', {
-      year: 'numeric',
-      month: 'numeric',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
-      hour12: false
-    });
-  }
-}
+            // Jika nilainya berupa angka murni (Timestamp milidetik)
+            if (!isNaN(Number(rawVal))) {
+              dateObj = new Date(Number(rawVal));
+            } else {
+              dateObj = new Date(rawVal);
+            }
+
+            if (!isNaN(dateObj.getTime())) {
+              // Gunakan timeZone: 'Asia/Jakarta' agar tampilan jam selalu WIB
+              displayDate = dateObj.toLocaleString('id-ID', {
+                timeZone: 'Asia/Jakarta',
+                year: 'numeric',
+                month: 'numeric',
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit',
+                hour12: false
+              });
+            }
+          }
 
           tbody.innerHTML += `
             <tr class="border-b">
