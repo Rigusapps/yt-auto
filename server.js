@@ -48,7 +48,7 @@ const upload = multer({
   limits: { fileSize: 500 * 1024 * 1024 } // Batas maksimum 500 MB per file video
 });
 
-// Middleware Pembungkus Multer untuk Menagkap Error Limit File
+// Middleware Pembungkus Multer untuk Menangkap Error Limit File
 function handleFileUpload(req, res, next) {
   const uploadSingle = upload.single('video');
   uploadSingle(req, res, (err) => {
@@ -227,13 +227,20 @@ const scheduleHandler = async (req, res) => {
       return res.status(400).json({ error: 'Pilih channel tujuan unggah!' });
     }
 
-    // --- PERBAIKAN TIMESTAMPS & ZONA WAKTU ---
+    // --- PERBAIKAN TIMESTAMPS & EKSPLISIT ZONA WAKTU WIB (+07:00) ---
     let timestamp;
     if (!isNaN(Number(scheduled_at))) {
+      // Jika sudah dikirim sebagai UNIX Timestamp milidetik dari frontend
       timestamp = Number(scheduled_at);
     } else {
-      const isIso = scheduled_at.includes('Z') || scheduled_at.includes('+');
-      timestamp = new Date(isIso ? scheduled_at : `${scheduled_at}:00`).getTime();
+      // Jika dikirim sebagai string datetime-local "YYYY-MM-DDTHH:mm"
+      const rawString = String(scheduled_at).trim();
+      const formattedInput = rawString.length === 16 ? `${rawString}:00` : rawString;
+      const hasOffset = formattedInput.includes('Z') || formattedInput.includes('+') || (formattedInput.includes('-') && formattedInput.length > 19);
+      
+      // Paksa tambahkan offset WIB (+07:00) jika belum ada timezone offset
+      const finalDateString = hasOffset ? formattedInput : `${formattedInput}+07:00`;
+      timestamp = new Date(finalDateString).getTime();
     }
 
     if (isNaN(timestamp)) {
