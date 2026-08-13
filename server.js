@@ -37,11 +37,32 @@ app.use(session({
 // Buat direktori temporary uploads jika belum ada
 if (!fs.existsSync('./uploads')) fs.mkdirSync('./uploads');
 
+// Konfigurasi Multer dengan Batas Ukuran File (Maksimal 500 MB)
 const storage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, 'uploads/'),
   filename: (req, file, cb) => cb(null, `${Date.now()}-${file.originalname}`)
 });
-const upload = multer({ storage });
+
+const upload = multer({ 
+  storage,
+  limits: { fileSize: 500 * 1024 * 1024 } // Batas maksimum 500 MB per file video
+});
+
+// Middleware Pembungkus Multer untuk Menagkap Error Limit File
+function handleFileUpload(req, res, next) {
+  const uploadSingle = upload.single('video');
+  uploadSingle(req, res, (err) => {
+    if (err instanceof multer.MulterError) {
+      if (err.code === 'LIMIT_FILE_SIZE') {
+        return res.status(400).json({ error: 'Ukuran berkas video terlalu besar! Maksimal 500 MB.' });
+      }
+      return res.status(400).json({ error: `Upload error: ${err.message}` });
+    } else if (err) {
+      return res.status(500).json({ error: `Server error: ${err.message}` });
+    }
+    next();
+  });
+}
 
 // --- MIDDLEWARES AUTHENTICATION & AUTHORIZATION ---
 function requireAuth(req, res, next) {
@@ -209,11 +230,8 @@ const scheduleHandler = async (req, res) => {
     // --- PERBAIKAN TIMESTAMPS & ZONA WAKTU ---
     let timestamp;
     if (!isNaN(Number(scheduled_at))) {
-      // Jika dikirim dari frontend sebagai angka milidetik
       timestamp = Number(scheduled_at);
     } else {
-      // Jika dikirim sebagai string datetime (contoh: "2026-08-13T13:57")
-      // Mengubah string datetime lokal ke format ISO lengkap agar tepat dibaca Date()
       const isIso = scheduled_at.includes('Z') || scheduled_at.includes('+');
       timestamp = new Date(isIso ? scheduled_at : `${scheduled_at}:00`).getTime();
     }
@@ -235,8 +253,8 @@ const scheduleHandler = async (req, res) => {
   }
 };
 
-app.post('/api/schedule', requireAuth, upload.single('video'), scheduleHandler);
-app.post('/schedule', requireAuth, upload.single('video'), scheduleHandler);
+app.post('/api/schedule', requireAuth, handleFileUpload, scheduleHandler);
+app.post('/schedule', requireAuth, handleFileUpload, scheduleHandler);
 
 // Get List Antrean Video (Turso Cloud)
 app.get('/queue-status', requireAuth, async (req, res) => {
