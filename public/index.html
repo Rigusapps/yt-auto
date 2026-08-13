@@ -10,14 +10,16 @@
   
   <div class="max-w-5xl mx-auto p-8 space-y-8 w-full">
     
+    <!-- User Bar Header -->
     <div class="bg-slate-800 text-white p-3 px-6 rounded-lg shadow flex justify-between items-center text-xs">
       <div id="userInfo" class="font-medium flex items-center gap-2">
         <span>Memuat data user...</span>
       </div>
       <div id="userNav" class="flex items-center gap-3">
-        </div>
+      </div>
     </div>
 
+    <!-- Header Actions & Listbox Channel -->
     <div class="bg-white p-6 rounded-lg shadow flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
       <div>
         <h1 class="text-2xl font-bold text-gray-800">YouTube Auto Uploader</h1>
@@ -41,6 +43,7 @@
       </div>
     </div>
 
+    <!-- Form Jadwal Video Baru -->
     <div class="bg-white p-6 rounded-lg shadow">
       <h2 class="text-lg font-semibold mb-4 border-b pb-2">Jadwalkan Video Baru</h2>
       <form id="uploadForm" class="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -94,6 +97,7 @@
       </form>
     </div>
 
+    <!-- Tabel Antrean Video -->
     <div class="bg-white p-6 rounded-lg shadow">
       <div class="flex justify-between items-center mb-4 border-b pb-2">
         <h2 class="text-lg font-semibold">Tabel Antrean Video</h2>
@@ -116,13 +120,15 @@
             </tr>
           </thead>
           <tbody id="queueTableBody">
-            </tbody>
+            <tr><td colspan="8" class="p-4 text-center text-gray-400">Memuat antrean...</td></tr>
+          </tbody>
         </table>
       </div>
     </div>
 
   </div>
 
+  <!-- Footer -->
   <footer class="bg-white border-t border-gray-200 mt-12 py-6">
     <div class="max-w-5xl mx-auto px-8 flex flex-col md:flex-row justify-between items-center gap-4 text-xs text-gray-500">
       <div>
@@ -140,13 +146,17 @@
   </footer>
 
   <script>
-    // Cek Sesi Pengguna & Hak Akses
+    // 1. Cek Sesi Pengguna & Hak Akses (Aman dari Parsing JSON HTML)
     async function checkUserSession() {
       try {
         const res = await fetch('/api/me');
+        if (!res.ok) {
+          window.location.href = '/login.html';
+          return;
+        }
         const data = await res.json();
 
-        if (!data.user) {
+        if (!data || !data.user) {
           window.location.href = '/login.html';
           return;
         }
@@ -166,30 +176,31 @@
         userNav.innerHTML += `<button onclick="window.logoutApp()" class="bg-red-600 hover:bg-red-700 text-white px-2.5 py-1 rounded font-medium transition cursor-pointer">Logout</button>`;
       } catch (err) {
         console.error("Gagal memeriksa sesi user:", err);
+        window.location.href = '/login.html';
       }
     }
 
-    // Fungsi Logout Aplikasi
+    // 2. Logout Aplikasi
     window.logoutApp = async function() {
       if (!confirm('Apakah Anda yakin ingin logout dari aplikasi?')) return;
       await fetch('/api/logout', { method: 'POST' });
       window.location.href = '/login.html';
     };
 
-    // Load Daftar Channel Terhubung ke Listbox Header & Dropdown Form
+    // 3. Load Daftar Channel Terhubung
     async function loadChannels() {
       try {
         const res = await fetch('/channels');
-        if (res.status === 401) return;
-        const channels = await res.json();
+        if (res.status === 401 || !res.ok) return;
         
+        const channels = await res.json();
         const listbox = document.getElementById('connectedChannelsListbox');
         const channelSelect = document.getElementById('channelSelect');
 
         listbox.innerHTML = '';
         channelSelect.innerHTML = '<option value="">-- Pilih Channel --</option>';
 
-        if (!channels || channels.length === 0) {
+        if (!channels || !Array.isArray(channels) || channels.length === 0) {
           listbox.innerHTML = `<option value="">Belum Ada Channel Terhubung</option>`;
           return;
         }
@@ -197,18 +208,17 @@
         listbox.innerHTML = `<option value="">-- Daftar Channel (${channels.length}) --</option>`;
 
         channels.forEach(ch => {
-          // Isi ke Listbox Header
           listbox.innerHTML += `<option value="${ch.id}">📺 ${ch.title}</option>`;
-
-          // Isi ke Dropdown Form
           channelSelect.innerHTML += `<option value="${ch.id}">${ch.title}</option>`;
         });
       } catch (err) {
         console.error("Gagal memuat daftar channel:", err);
+        const listbox = document.getElementById('connectedChannelsListbox');
+        if (listbox) listbox.innerHTML = `<option value="">Gagal memuat channel</option>`;
       }
     }
 
-    // Fungsi Hapus Channel yang Dipilih dari Listbox
+    // 4. Hapus Channel Terpilih
     window.deleteSelectedChannel = async function() {
       const listbox = document.getElementById('connectedChannelsListbox');
       const selectedChannelId = listbox.value;
@@ -236,7 +246,7 @@
       }
     };
 
-    // Bersihkan Antrean Macet/Failed/Tanpa Channel Sekaligus
+    // 5. Bersihkan Antrean Macet
     window.clearStuckQueue = async function() {
       if (!confirm('Apakah Anda yakin ingin menghapus semua antrean yang macet, gagal, atau tanpa channel?')) return;
 
@@ -254,16 +264,17 @@
       }
     };
 
-    // Load Data Antrean
+    // 6. Load Data Antrean Video
     async function loadQueue() {
       try {
         const res = await fetch('/queue-status');
-        if (res.status === 401) return;
+        if (res.status === 401 || !res.ok) return;
+
         const queue = await res.json();
         const tbody = document.getElementById('queueTableBody');
         tbody.innerHTML = '';
 
-        if (!queue || queue.length === 0) {
+        if (!queue || !Array.isArray(queue) || queue.length === 0) {
           tbody.innerHTML = `<tr><td colspan="8" class="p-4 text-center text-gray-400">Belum ada video dalam antrean</td></tr>`;
           return;
         }
@@ -320,7 +331,7 @@
       }
     }
 
-    // Fungsi Hapus Item Antrean (Per-baris)
+    // 7. Hapus Item Antrean (Per-baris)
     window.deleteQueue = async function(id) {
       if (!confirm('Apakah Anda yakin ingin menghapus item ini?')) return;
 
@@ -337,7 +348,7 @@
       }
     };
 
-    // Submit Form Event (DIPERBAIKI UNTUK PRESISI TIMEZONE & UPLOAD PROGRESS)
+    // 8. Submit Form Event (Dengn Presisi Timestamp & Lock Button)
     document.getElementById('uploadForm').addEventListener('submit', async (e) => {
       e.preventDefault();
       
@@ -350,10 +361,9 @@
 
         const formData = new FormData(e.target);
 
-        // --- KONVERSI WAKTU EKSPLISIT DARI BROWSER KE UNIX TIMESTAMP MILIDETIK ---
+        // Konversi waktu input browser ke UNIX Timestamp milidetik
         const scheduledAtInput = e.target.querySelector('input[name="scheduled_at"]').value;
         if (scheduledAtInput) {
-          // new Date(scheduledAtInput).getTime() membaca jam persis sesuai Waktu PC / Laptop User
           const localTimestamp = new Date(scheduledAtInput).getTime();
           formData.set('scheduled_at', localTimestamp);
         }
@@ -381,25 +391,7 @@
       }
     });
 
-        const data = await res.json();
-
-        if (res.ok) {
-          alert('✅ Video berhasil dijadwalkan!');
-          e.target.reset();
-          await loadQueue();
-        } else {
-          alert('❌ Gagal: ' + (data.error || 'Terjadi kesalahan pada server'));
-        }
-      } catch (err) {
-        console.error('Error submit form:', err);
-        alert('❌ Terjadi kesalahan jaringan atau ukuran file terlalu besar: ' + err.message);
-      } finally {
-        submitBtn.disabled = false;
-        submitBtn.innerHTML = originalBtnText;
-      }
-    });
-
-    // Run on load
+    // Jalankan saat pertama kali halaman dimuat
     checkUserSession();
     loadChannels();
     loadQueue();
