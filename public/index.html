@@ -264,7 +264,7 @@
       }
     };
 
-    // 6. Load Data Antrean Video
+    // 6. Load Data Antrean Video (DENGAN DUAL-PARSING ANTI UTC BUG DI ADMIN/USER)
     async function loadQueue() {
       try {
         const res = await fetch('/queue-status');
@@ -295,11 +295,21 @@
 
           let actionBtn = `<button onclick="window.deleteQueue(${item.id})" class="bg-red-500 hover:bg-red-600 text-white text-xs px-3 py-1 rounded transition cursor-pointer font-medium">Hapus</button>`;
 
-          // --- RENDERING TAMPILAN JAM PRESISI SESUAI INPUT USER ---
+          // --- RENDERING TAMPILAN JAM PRESISI (BEBAS BUG UTC LEFT JOIN ADMIN) ---
           let displayDate = '-';
           if (item.scheduled_at) {
-            const numTimestamp = Number(item.scheduled_at);
-            const dateObj = new Date(numTimestamp);
+            const rawVal = String(item.scheduled_at).trim();
+            let dateObj;
+
+            if (!isNaN(Number(rawVal))) {
+              // Jika bertipe angka timestamp murni
+              dateObj = new Date(Number(rawVal));
+            } else {
+              // Jika dikembalikan sebagai String ISO UTC oleh LEFT JOIN Query Admin
+              // Hapus akhiran 'Z' dan '+00:00' agar tidak dikonversi ganda (+7 jam) oleh browser
+              const cleanIso = rawVal.replace('Z', '').replace('+00:00', '');
+              dateObj = new Date(cleanIso);
+            }
 
             if (!isNaN(dateObj.getTime())) {
               displayDate = dateObj.toLocaleString('id-ID', {
