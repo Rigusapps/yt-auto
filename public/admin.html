@@ -6,19 +6,22 @@
   <title>Admin Panel - Kelola User & Approval</title>
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body class="bg-gray-100 min-h-screen p-8">
+<body class="bg-gray-100 min-h-screen p-8 space-y-8">
+  
   <div class="max-w-6xl mx-auto bg-white p-6 rounded-lg shadow space-y-6">
     
+    <!-- Header Admin -->
     <div class="flex justify-between items-center border-b pb-4">
       <div>
         <h1 class="text-2xl font-bold text-gray-800">Admin Panel Control</h1>
-        <p class="text-xs text-gray-500">Konfirmasi dan kelola hak akses akun pendaftar</p>
+        <p class="text-xs text-gray-500">Konfirmasi, kelola hak akses akun, serta pantau seluruh antrean sistem</p>
       </div>
       <a href="/" class="bg-gray-600 hover:bg-gray-700 text-white text-xs px-3 py-2 rounded font-medium transition">
         ← Kembali ke Dashboard
       </a>
     </div>
 
+    <!-- Tabel 1: Daftar Pengguna & Approval -->
     <div class="overflow-x-auto">
       <h2 class="text-lg font-semibold mb-3">Daftar Pengguna & Permintaan Persetujuan</h2>
       <table class="w-full text-left border-collapse text-sm">
@@ -34,7 +37,35 @@
           </tr>
         </thead>
         <tbody id="userTableBody">
-          <!-- Dynamic User Rows -->
+          <tr><td colspan="7" class="p-4 text-center text-gray-400">Memuat data pengguna...</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Tabel 2: Monitor Antrean Semua User (Backend Centralized Formatting) -->
+    <div class="overflow-x-auto pt-6 border-t">
+      <div class="flex justify-between items-center mb-3">
+        <h2 class="text-lg font-semibold">Monitor Antrean Semua Video (System Wide)</h2>
+        <button onclick="window.clearStuckQueue()" class="bg-red-100 hover:bg-red-200 text-red-700 text-xs px-3 py-1.5 rounded transition cursor-pointer font-medium">
+          Bersihkan Macet / Tanpa Channel
+        </button>
+      </div>
+      <table class="w-full text-left border-collapse text-sm">
+        <thead>
+          <tr class="bg-gray-50 border-b text-gray-700">
+            <th class="p-3">ID</th>
+            <th class="p-3">User Pemilik</th>
+            <th class="p-3">Channel</th>
+            <th class="p-3">Judul</th>
+            <th class="p-3">Jadwal Tayang (WIB)</th>
+            <th class="p-3">Privasi</th>
+            <th class="p-3">Status</th>
+            <th class="p-3">Info/Hasil</th>
+            <th class="p-3">Aksi</th>
+          </tr>
+        </thead>
+        <tbody id="queueTableBody">
+          <tr><td colspan="9" class="p-4 text-center text-gray-400">Memuat antrean sistem...</td></tr>
         </tbody>
       </table>
     </div>
@@ -42,6 +73,7 @@
   </div>
 
   <script>
+    // 1. KELOLA DATA USER & APPROVAL
     async function loadUsers() {
       try {
         const res = await fetch('/api/admin/users');
@@ -54,6 +86,11 @@
         const users = await res.json();
         const tbody = document.getElementById('userTableBody');
         tbody.innerHTML = '';
+
+        if (!users || !Array.isArray(users) || users.length === 0) {
+          tbody.innerHTML = `<tr><td colspan="7" class="p-4 text-center text-gray-400">Belum ada pengguna terdaftar</td></tr>`;
+          return;
+        }
 
         users.forEach(u => {
           let statusBadge = u.is_approved === 1 
@@ -73,7 +110,6 @@
             ? `<button onclick="deleteUser(${u.id})" class="bg-red-500 hover:bg-red-600 text-white text-xs px-2.5 py-1 rounded cursor-pointer font-medium ml-1">Hapus</button>` 
             : '';
 
-          // Format WhatsApp Link
           let cleanWa = u.whatsapp ? u.whatsapp.replace(/[^0-9]/g, '') : '';
           if (cleanWa.startsWith('0')) cleanWa = '62' + cleanWa.slice(1);
           let waLink = cleanWa ? `<a href="https://wa.me/${cleanWa}" target="_blank" class="text-green-600 font-medium underline">${u.whatsapp}</a>` : '-';
@@ -120,9 +156,98 @@
       if (!confirm('Apakah Anda yakin ingin menghapus pengguna ini secara permanen?')) return;
       await fetch(`/api/admin/users/${id}`, { method: 'DELETE' });
       loadUsers();
+      loadAdminQueue();
     }
 
+    // 2. MONITOR ANTREAN SISTEM (MENAMPILKAN STRING WAKTU PRESISI DARI BACKEND)
+    async function loadAdminQueue() {
+      try {
+        const res = await fetch('/queue-status');
+        if (!res.ok) return;
+
+        const queue = await res.json();
+        const tbody = document.getElementById('queueTableBody');
+        tbody.innerHTML = '';
+
+        if (!queue || !Array.isArray(queue) || queue.length === 0) {
+          tbody.innerHTML = `<tr><td colspan="9" class="p-4 text-center text-gray-400">Tidak ada antrean video di dalam sistem</td></tr>`;
+          return;
+        }
+
+        queue.forEach((item, index) => {
+          let statusBadge = '';
+          if (item.status === 'Pending') statusBadge = `<span class="bg-yellow-100 text-yellow-800 text-xs px-2 py-1 rounded font-medium">Pending</span>`;
+          else if (item.status === 'Processing') statusBadge = `<span class="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded font-medium">Processing</span>`;
+          else if (item.status === 'Completed') statusBadge = `<span class="bg-green-100 text-green-800 text-xs px-2 py-1 rounded font-medium">Completed</span>`;
+          else statusBadge = `<span class="bg-red-100 text-red-800 text-xs px-2 py-1 rounded font-medium">Failed</span>`;
+
+          let info = '-';
+          if (item.youtube_id) {
+            info = `<a href="https://youtu.be/${item.youtube_id}" target="_blank" class="text-blue-600 underline font-medium">Lihat Video</a>`;
+          } else if (item.error_message) {
+            info = `<span class="text-red-500 text-xs">${item.error_message}</span>`;
+          }
+
+          // MENGGUNAKAN TEKS MATANG DARI BACKEND (display_date)
+          const displayDate = item.display_date || '-';
+
+          tbody.innerHTML += `
+            <tr class="border-b">
+              <td class="p-3">${index + 1}</td>
+              <td class="p-3 font-semibold text-blue-600">${item.username || 'System'}</td>
+              <td class="p-3 font-medium text-gray-700">${item.channel_name || '<span class="text-red-500 font-normal">Tanpa Channel</span>'}</td>
+              <td class="p-3 font-medium">${item.title}</td>
+              <td class="p-3 font-semibold text-gray-800">${displayDate}</td>
+              <td class="p-3 capitalize">${item.privacy_status}</td>
+              <td class="p-3">${statusBadge}</td>
+              <td class="p-3">${info}</td>
+              <td class="p-3">
+                <button onclick="window.deleteQueue(${item.id})" class="bg-red-500 hover:bg-red-600 text-white text-xs px-2.5 py-1 rounded transition cursor-pointer font-medium">Hapus</button>
+              </td>
+            </tr>
+          `;
+        });
+      } catch (err) {
+        console.error("Gagal memuat antrean admin:", err);
+      }
+    }
+
+    window.deleteQueue = async function(id) {
+      if (!confirm('Apakah Anda yakin ingin menghapus antrean ini?')) return;
+
+      try {
+        const res = await fetch(`/queue/${id}`, { method: 'DELETE' });
+        if (res.ok) {
+          loadAdminQueue();
+        } else {
+          alert('Gagal menghapus antrean.');
+        }
+      } catch (err) {
+        alert('Terjadi kesalahan: ' + err.message);
+      }
+    };
+
+    window.clearStuckQueue = async function() {
+      if (!confirm('Apakah Anda yakin ingin menghapus semua antrean yang macet, gagal, atau tanpa channel?')) return;
+
+      try {
+        const res = await fetch('/clear-stuck-queue', { method: 'DELETE' });
+        const data = await res.json();
+        if (res.ok) {
+          alert(data.message);
+          loadAdminQueue();
+        } else {
+          alert('Gagal membersihkan: ' + (data.error || 'Terjadi kesalahan server'));
+        }
+      } catch (err) {
+        alert('Terjadi kesalahan: ' + err.message);
+      }
+    };
+
+    // INIT DATA & POLLING SINKRON
     loadUsers();
+    loadAdminQueue();
+    setInterval(loadAdminQueue, 10000);
   </script>
 </body>
 </html>
