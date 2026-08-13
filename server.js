@@ -227,7 +227,7 @@ const scheduleHandler = async (req, res) => {
       return res.status(400).json({ error: 'Pilih channel tujuan unggah!' });
     }
 
-    // --- SIMPAN SELALU SEBAGAI ANGKA MILIDETIK MURNI ---
+    // SIMPAN TIMESTAMP LOKAL SECARA PRESISI
     let timestamp = Number(scheduled_at);
     if (isNaN(timestamp) || timestamp <= 0) {
       timestamp = new Date(scheduled_at).getTime();
@@ -253,13 +253,13 @@ const scheduleHandler = async (req, res) => {
 app.post('/api/schedule', requireAuth, handleFileUpload, scheduleHandler);
 app.post('/schedule', requireAuth, handleFileUpload, scheduleHandler);
 
-// Get List Antrean Video (Solusi Murni Tanpa Masalah JOIN Turso)
+// Get List Antrean Video (SOLUSI DENGAN PENYELARASAN DUA WAKTU)
 app.get('/queue-status', requireAuth, async (req, res) => {
   try {
     const userId = req.session.user.id;
     const isDbAdmin = req.session.user.role === 'admin';
 
-    // 1. Ambil data antrean utama tanpa JOIN (Menjamin scheduled_at murni bertipe Number)
+    // Query antrean murni
     const queueSql = isDbAdmin
       ? `SELECT * FROM queue ORDER BY id ASC`
       : `SELECT * FROM queue WHERE user_id = ? ORDER BY id ASC`;
@@ -268,7 +268,7 @@ app.get('/queue-status', requireAuth, async (req, res) => {
       ? await turso.execute(queueSql) 
       : await turso.execute({ sql: queueSql, args: [userId] });
 
-    // 2. Ambil data pendukung channel & users untuk mapping
+    // Ambil data channel dan users
     const channelsRes = await turso.execute(`SELECT id, title FROM channels`);
     const usersRes = await turso.execute(`SELECT id, username FROM users`);
 
@@ -278,9 +278,7 @@ app.get('/queue-status', requireAuth, async (req, res) => {
     const userMap = {};
     usersRes.rows.forEach(u => userMap[u.id] = u.username);
 
-    // 3. Gabungkan data secara eksplisit di JavaScript
     const result = queueRes.rows.map(item => {
-      // Jika karena suatu alasan Turso mengembalikan string ISO, konversi dengan aman
       let rawVal = item.scheduled_at;
       let finalNum = Number(rawVal);
 
