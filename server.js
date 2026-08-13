@@ -14,6 +14,9 @@ require('dotenv').config();
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// Inisialisasi Tabel Turso saat aplikasi pertama kali berjalan
+initDb();
+
 // --- PROXY SETTING UNTUK CLOUD DEPLOYMENT (RENDER/HEROKU) ---
 app.set('trust proxy', 1);
 
@@ -58,7 +61,7 @@ function requireAdmin(req, res, next) {
 
 // --- AUTH ROUTES ---
 
-// 1. Register User Baru
+// 1. Register User Baru (Turso Cloud)
 app.post('/api/register', async (req, res) => {
   try {
     const { username, password, email, whatsapp } = req.body;
@@ -69,15 +72,16 @@ app.post('/api/register', async (req, res) => {
     const hashedPassword = await bcrypt.hash(password, 10);
     
     // Pendaftar pertama otomatis menjadi Admin & Langsung Approved
-    const count = db.prepare('SELECT COUNT(*) as cnt FROM users').get().cnt;
+    const countRes = await turso.execute("SELECT COUNT(*) as cnt FROM users");
+    const count = countRes.rows[0].cnt;
+
     const role = count === 0 ? 'admin' : 'user';
     const isApproved = count === 0 ? 1 : 0;
 
-    const stmt = db.prepare(`
-      INSERT INTO users (username, password, email, whatsapp, role, is_approved) 
-      VALUES (?, ?, ?, ?, ?, ?)
-    `);
-    stmt.run(username, hashedPassword, email, whatsapp, role, isApproved);
+    await turso.execute({
+      sql: `INSERT INTO users (username, password, email, whatsapp, role, is_approved) VALUES (?, ?, ?, ?, ?, ?)`,
+      args: [username, hashedPassword, email, whatsapp, role, isApproved]
+    });
 
     const msg = role === 'admin' 
       ? 'Pendaftaran Admin berhasil! Silakan login.' 
@@ -85,19 +89,24 @@ app.post('/api/register', async (req, res) => {
 
     res.json({ message: msg });
   } catch (err) {
-    if (err.message.includes('UNIQUE')) {
+    if (err.message && err.message.includes('UNIQUE')) {
       return res.status(400).json({ error: 'Username sudah digunakan.' });
     }
     res.status(500).json({ error: err.message });
   }
 });
 
-// 2. Login User
+// 2. Login User (Turso Cloud)
 app.post('/api/login', async (req, res) => {
   try {
     const { username, password } = req.body;
-    const user = db.prepare('SELECT * FROM users WHERE username = ?').get(username);
+    const userRes = await turso.execute({
+      sql: 'SELECT * FROM users WHERE username = ?',
+      args: [username]
+    });
     
+    const user = userRes.rows[0];
+
     if (!user || !(await bcrypt.compare(password, user.password))) {
       return res.status(400).json({ error: 'Username atau Password salah!' });
     }
@@ -152,30 +161,31 @@ app.get('/oauth2callback', async (req, res) => {
   }
 });
 
-// Get Daftar Channel Milik User
-app.get('/channels', requireAuth, (req, res) => {
+// Get Daftar Channel Milik User (Turso Cloud)
+app.get('/channels', requireAuth, async (req, res) => {
   try {
     const userId = req.session.user.id;
-    const channels = req.session.user.role === 'admin' 
-      ? db.prepare('SELECT id, title, avatar_url FROM channels').all()
-      : db.prepare('SELECT id, title, avatar_url FROM channels WHERE user_id = ?').all(userId);
-    res.json(channels);
+    const channelsRes = req.session.user.role === 'admin' 
+      ? await turso.execute('SELECT id, title, avatar_url FROM channels')
+      : await turso.execute({ sql: 'SELECT id, title, avatar_url FROM channels WHERE user_id = ?', args: [userId] });
+    
+    res.json(channelsRes.rows);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-// Hapus Koneksi Channel
-app.delete('/channels/:id', requireAuth, (req, res) => {
+// Hapus Koneksi Channel (Turso Cloud)
+app.delete('/channels/:id', requireAuth, async (req, res) => {
   try {
     const channelId = req.params.id;
     const userId = req.session.user.id;
     const isAdmin = req.session.user.role === 'admin';
 
     if (isAdmin) {
-      db.prepare('DELETE FROM channels WHERE id = ?').run(channelId);
+      await turso.execute({ sql: 'DELETE FROM channels WHERE id = ?', args: [channelId] });
     } else {
-      db.prepare('DELETE FROM channels WHERE id = ? AND user_id = ?').run(channelId, userId);
+      await turso.execute({ sql: 'DELETE FROM channels WHERE id = ? AND user_id = ?', args: [channelId, userId] });
     }
     
     res.json({ success: true, message: 'Channel berhasil dihapus' });
@@ -186,8 +196,8 @@ app.delete('/channels/:id', requireAuth, (req, res) => {
 
 // --- QUEUE MANAGEMENT ROUTES ---
 
-// Tambah Video Baru ke Antrean
-app.post('/schedule', requireAuth, upload.single('video'), (req, res) => {
+// Tambah Video Baru ke Antrean (Mendukung Endpoint /api/schedule dan /schedule)
+const scheduleHandler = async (req, res) => {
   try {
     const { title, description, tags, privacy_status, scheduled_at, channel_id } = req.body;
     
@@ -205,20 +215,22 @@ app.post('/schedule', requireAuth, upload.single('video'), (req, res) => {
 
     const userId = req.session.user.id;
 
-    const stmt = db.prepare(`
-      INSERT INTO queue (title, description, tags, privacy_status, scheduled_at, file_path, channel_id, user_id)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    `);
-    stmt.run(title, description, tags, privacy_status, timestamp, req.file.path, channel_id, userId);
+    await turso.execute({
+      sql: `INSERT INTO queue (title, description, tags, privacy_status, scheduled_at, file_path, channel_id, user_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      args: [title, description || '', tags || '', privacy_status || 'private', timestamp, req.file.path, channel_id, userId]
+    });
 
     res.json({ message: 'Video berhasil ditambahkan ke antrean!' });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
-});
+};
 
-// Get List Antrean Video
-app.get('/queue-status', requireAuth, (req, res) => {
+app.post('/api/schedule', requireAuth, upload.single('video'), scheduleHandler);
+app.post('/schedule', requireAuth, upload.single('video'), scheduleHandler);
+
+// Get List Antrean Video (Turso Cloud)
+app.get('/queue-status', requireAuth, async (req, res) => {
   try {
     const userId = req.session.user.id;
     const isDbAdmin = req.session.user.role === 'admin';
@@ -237,21 +249,23 @@ app.get('/queue-status', requireAuth, (req, res) => {
       ORDER BY q.id ASC
     `;
 
-    const rows = isDbAdmin ? db.prepare(sql).all() : db.prepare(sql).all(userId);
-    res.json(rows);
+    const rowsRes = isDbAdmin ? await turso.execute(sql) : await turso.execute({ sql, args: [userId] });
+    res.json(rowsRes.rows);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-// Hapus Item Antrean Per-Baris
-app.delete('/queue/:id', requireAuth, (req, res) => {
+// Hapus Item Antrean Per-Baris (Turso Cloud)
+app.delete('/queue/:id', requireAuth, async (req, res) => {
   try {
     const { id } = req.params;
     const userId = req.session.user.id;
     const isAdmin = req.session.user.role === 'admin';
 
-    const item = db.prepare('SELECT * FROM queue WHERE id = ?').get(id);
+    const itemRes = await turso.execute({ sql: 'SELECT * FROM queue WHERE id = ?', args: [id] });
+    const item = itemRes.rows[0];
+
     if (!item) {
       return res.status(404).json({ error: 'Data tidak ditemukan' });
     }
@@ -266,15 +280,15 @@ app.delete('/queue/:id', requireAuth, (req, res) => {
       try { fs.unlinkSync(item.file_path); } catch (e) {}
     }
 
-    db.prepare('DELETE FROM queue WHERE id = ?').run(id);
+    await turso.execute({ sql: 'DELETE FROM queue WHERE id = ?', args: [id] });
     res.json({ success: true, message: 'Berhasil dihapus' });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-// Bersihkan Antrean Macet / Failed / Tanpa Channel
-app.delete('/clear-stuck-queue', requireAuth, (req, res) => {
+// Bersihkan Antrean Macet / Failed / Tanpa Channel (Turso Cloud)
+app.delete('/clear-stuck-queue', requireAuth, async (req, res) => {
   try {
     const userId = req.session.user.id;
     const isAdmin = req.session.user.role === 'admin';
@@ -288,9 +302,9 @@ app.delete('/clear-stuck-queue', requireAuth, (req, res) => {
         AND user_id = ?
     `;
 
-    const stuckItems = isAdmin ? db.prepare(sqlSelect).all() : db.prepare(sqlSelect).all(userId);
+    const stuckItemsRes = isAdmin ? await turso.execute(sqlSelect) : await turso.execute({ sql: sqlSelect, args: [userId] });
 
-    stuckItems.forEach(item => {
+    stuckItemsRes.rows.forEach(item => {
       if (item.file_path && fs.existsSync(item.file_path)) {
         try { fs.unlinkSync(item.file_path); } catch (e) {}
       }
@@ -305,9 +319,9 @@ app.delete('/clear-stuck-queue', requireAuth, (req, res) => {
         AND user_id = ?
     `;
 
-    const result = isAdmin ? db.prepare(sqlDelete).run() : db.prepare(sqlDelete).run(userId);
+    const result = isAdmin ? await turso.execute(sqlDelete) : await turso.execute({ sql: sqlDelete, args: [userId] });
 
-    res.json({ success: true, message: `Berhasil membersihkan ${result.changes} data antrean.` });
+    res.json({ success: true, message: `Berhasil membersihkan data antrean.` });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -315,43 +329,46 @@ app.delete('/clear-stuck-queue', requireAuth, (req, res) => {
 
 // --- ADMIN SPECIFIC ROUTES ---
 
-// Get Seluruh User untuk Admin
-app.get('/api/admin/users', requireAdmin, (req, res) => {
+// Get Seluruh User untuk Admin (Turso Cloud)
+app.get('/api/admin/users', requireAdmin, async (req, res) => {
   try {
-    const users = db.prepare('SELECT id, username, email, whatsapp, role, is_approved, created_at FROM users').all();
-    res.json(users);
+    const usersRes = await turso.execute('SELECT id, username, email, whatsapp, role, is_approved, created_at FROM users');
+    res.json(usersRes.rows);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-// Approve / Setujui Akun User
-app.post('/api/admin/approve/:id', requireAdmin, (req, res) => {
+// Approve / Setujui Akun User (Turso Cloud)
+app.post('/api/admin/approve/:id', requireAdmin, async (req, res) => {
   try {
     const { is_approved } = req.body; // 1 = Disetujui, 0 = Ditangguhkan
-    db.prepare('UPDATE users SET is_approved = ? WHERE id = ?').run(is_approved, req.params.id);
+    await turso.execute({
+      sql: 'UPDATE users SET is_approved = ? WHERE id = ?',
+      args: [is_approved, req.params.id]
+    });
     res.json({ success: true, message: 'Status user berhasil diperbarui.' });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-// Hapus User oleh Admin
-app.delete('/api/admin/users/:id', requireAdmin, (req, res) => {
+// Hapus User oleh Admin (Turso Cloud)
+app.delete('/api/admin/users/:id', requireAdmin, async (req, res) => {
   try {
     const targetUserId = req.params.id;
 
     // Bersihkan file-file antrean milik user ini sebelum menghapus user
-    const userQueue = db.prepare('SELECT file_path FROM queue WHERE user_id = ?').all(targetUserId);
-    userQueue.forEach(q => {
+    const userQueueRes = await turso.execute({ sql: 'SELECT file_path FROM queue WHERE user_id = ?', args: [targetUserId] });
+    userQueueRes.rows.forEach(q => {
       if (q.file_path && fs.existsSync(q.file_path)) {
         try { fs.unlinkSync(q.file_path); } catch (e) {}
       }
     });
 
-    db.prepare('DELETE FROM queue WHERE user_id = ?').run(targetUserId);
-    db.prepare('DELETE FROM channels WHERE user_id = ?').run(targetUserId);
-    db.prepare('DELETE FROM users WHERE id = ?').run(targetUserId);
+    await turso.execute({ sql: 'DELETE FROM queue WHERE user_id = ?', args: [targetUserId] });
+    await turso.execute({ sql: 'DELETE FROM channels WHERE user_id = ?', args: [targetUserId] });
+    await turso.execute({ sql: 'DELETE FROM users WHERE id = ?', args: [targetUserId] });
 
     res.json({ success: true, message: 'User beserta datanya berhasil dihapus.' });
   } catch (err) {
