@@ -264,7 +264,7 @@
       }
     };
 
-    // 6. Load Data Antrean Video (DENGAN PENANGANAN ZONA WAKTU ASIA/JAKARTA)
+    // 6. Load Data Antrean Video
     async function loadQueue() {
       try {
         const res = await fetch('/queue-status');
@@ -295,23 +295,14 @@
 
           let actionBtn = `<button onclick="window.deleteQueue(${item.id})" class="bg-red-500 hover:bg-red-600 text-white text-xs px-3 py-1 rounded transition cursor-pointer font-medium">Hapus</button>`;
 
-          // --- PENANGANAN PARSING WAKTU SUPAYA SAMA DI ADMIN MAUPUN USER ---
+          // --- RENDERING TAMPILAN JAM PRESISI SESUAI INPUT USER ---
           let displayDate = '-';
           if (item.scheduled_at) {
-            const rawVal = String(item.scheduled_at);
-            let dateObj;
-
-            // Jika nilainya berupa angka murni (Timestamp milidetik)
-            if (!isNaN(Number(rawVal))) {
-              dateObj = new Date(Number(rawVal));
-            } else {
-              dateObj = new Date(rawVal);
-            }
+            const numTimestamp = Number(item.scheduled_at);
+            const dateObj = new Date(numTimestamp);
 
             if (!isNaN(dateObj.getTime())) {
-              // Gunakan timeZone: 'Asia/Jakarta' agar tampilan jam selalu WIB
               displayDate = dateObj.toLocaleString('id-ID', {
-                timeZone: 'Asia/Jakarta',
                 year: 'numeric',
                 month: 'numeric',
                 day: 'numeric',
@@ -358,7 +349,7 @@
       }
     };
 
-    // 8. Submit Form Event (DENGAN INDIKATOR PERSENTASE PROGRESS UPLOAD REAL-TIME)
+    // 8. Submit Form Event (KONVERSI WAKTU LOKAL SECARA PRESISI TANPA UTC BUG)
     document.getElementById('uploadForm').addEventListener('submit', function (e) {
       e.preventDefault();
       
@@ -366,11 +357,24 @@
       const originalBtnText = submitBtn.innerHTML;
       const formData = new FormData(e.target);
 
-      // Konversi waktu input browser ke UNIX Timestamp milidetik lokal
+      // Parsing String datetime-local ("YYYY-MM-DDTHH:mm") langsung ke Waktu Lokal PC
       const scheduledAtInput = e.target.querySelector('input[name="scheduled_at"]').value;
       if (scheduledAtInput) {
-        const localTimestamp = new Date(scheduledAtInput).getTime();
-        formData.set('scheduled_at', localTimestamp);
+        const parts = scheduledAtInput.split('T');
+        if (parts.length === 2) {
+          const dateParts = parts[0].split('-');
+          const timeParts = parts[1].split(':');
+          
+          const year = parseInt(dateParts[0], 10);
+          const month = parseInt(dateParts[1], 10) - 1; // Month 0-indexed
+          const day = parseInt(dateParts[2], 10);
+          const hour = parseInt(timeParts[0], 10);
+          const minute = parseInt(timeParts[1], 10);
+
+          // Buat Objek Date Murni berdasarkan Komponen Lokal
+          const exactLocalTimestamp = new Date(year, month, day, hour, minute, 0).getTime();
+          formData.set('scheduled_at', exactLocalTimestamp);
+        }
       }
 
       submitBtn.disabled = true;
@@ -379,7 +383,6 @@
       const xhr = new XMLHttpRequest();
       xhr.open('POST', '/api/schedule', true);
 
-      // Listener Progres Unggah (0% - 100%)
       xhr.upload.onprogress = function(event) {
         if (event.lengthComputable) {
           const percentComplete = Math.round((event.loaded / event.total) * 100);
@@ -387,7 +390,6 @@
         }
       };
 
-      // Handler Respons dari Server
       xhr.onload = function() {
         submitBtn.disabled = false;
         submitBtn.innerHTML = originalBtnText;
@@ -406,7 +408,6 @@
         }
       };
 
-      // Handler Kesalahan Jaringan
       xhr.onerror = function() {
         submitBtn.disabled = false;
         submitBtn.innerHTML = originalBtnText;
