@@ -255,29 +255,26 @@ const scheduleHandler = async (req, res) => {
 app.post('/api/schedule', requireAuth, handleFileUpload, scheduleHandler);
 app.post('/schedule', requireAuth, handleFileUpload, scheduleHandler);
 
-// Get List Antrean Video (Turso Cloud) - DENGAN FIX CASTING BIGINT DENGAN EXPUNGE ISO BUG
+// Get List Antrean Video (Turso Cloud) - SOLUSI SANITASI BEBAS PERBEDAN WIB/UTC
 app.get('/queue-status', requireAuth, async (req, res) => {
   try {
     const userId = req.session.user.id;
     const isDbAdmin = req.session.user.role === 'admin';
 
-    // CAST(q.scheduled_at AS BIGINT) memaksa Turso mengirimkan angka murni saat LEFT JOIN
     const sql = isDbAdmin ? `
-      SELECT 
-        q.id, q.title, q.description, q.tags, q.privacy_status, 
-        CAST(q.scheduled_at AS BIGINT) AS scheduled_at, 
-        q.file_path, q.youtube_id, q.status, q.error_message, q.channel_id, q.user_id,
-        c.title AS channel_name, u.username 
+      SELECT q.id, q.title, q.description, q.tags, q.privacy_status, 
+             q.scheduled_at, q.file_path, q.youtube_id, q.status, 
+             q.error_message, q.channel_id, q.user_id,
+             c.title AS channel_name, u.username 
       FROM queue q 
       LEFT JOIN channels c ON q.channel_id = c.id 
       LEFT JOIN users u ON q.user_id = u.id
       ORDER BY q.id ASC
     ` : `
-      SELECT 
-        q.id, q.title, q.description, q.tags, q.privacy_status, 
-        CAST(q.scheduled_at AS BIGINT) AS scheduled_at, 
-        q.file_path, q.youtube_id, q.status, q.error_message, q.channel_id, q.user_id,
-        c.title AS channel_name 
+      SELECT q.id, q.title, q.description, q.tags, q.privacy_status, 
+             q.scheduled_at, q.file_path, q.youtube_id, q.status, 
+             q.error_message, q.channel_id, q.user_id,
+             c.title AS channel_name 
       FROM queue q 
       LEFT JOIN channels c ON q.channel_id = c.id 
       WHERE q.user_id = ?
@@ -285,7 +282,26 @@ app.get('/queue-status', requireAuth, async (req, res) => {
     `;
 
     const rowsRes = isDbAdmin ? await turso.execute(sql) : await turso.execute({ sql, args: [userId] });
-    res.json(rowsRes.rows);
+    
+    // PERBAIKAN UTAMA: Paksa setiap item 'scheduled_at' menjadi Angka Milidetik murni
+    const sanitizedRows = rowsRes.rows.map(row => {
+      let finalTimestamp = row.scheduled_at;
+
+      if (typeof row.scheduled_at === 'string') {
+        // Hapus 'Z' dan '+00:00' dari string ISO hasil LEFT JOIN agar Date() tidak menambah +7 jam ganda
+        const cleanStr = row.scheduled_at.replace('Z', '').replace('+00:00', '');
+        finalTimestamp = new Date(cleanStr).getTime();
+      } else if (typeof row.scheduled_at === 'bigint') {
+        finalTimestamp = Number(row.scheduled_at);
+      }
+
+      return {
+        ...row,
+        scheduled_at: finalTimestamp
+      };
+    });
+
+    res.json(sanitizedRows);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
