@@ -227,7 +227,7 @@ const scheduleHandler = async (req, res) => {
       return res.status(400).json({ error: 'Pilih channel tujuan unggah!' });
     }
 
-    // --- PARSING ANKGA TIMESTAMP MILIDETIK MURNI ---
+    // --- PARSING ANGKA TIMESTAMP MILIDETIK MURNI ---
     let timestamp;
     if (!isNaN(Number(scheduled_at))) {
       timestamp = Number(scheduled_at);
@@ -255,20 +255,29 @@ const scheduleHandler = async (req, res) => {
 app.post('/api/schedule', requireAuth, handleFileUpload, scheduleHandler);
 app.post('/schedule', requireAuth, handleFileUpload, scheduleHandler);
 
-// Get List Antrean Video (Turso Cloud)
+// Get List Antrean Video (Turso Cloud) - DENGAN FIX CASTING BIGINT DENGAN EXPUNGE ISO BUG
 app.get('/queue-status', requireAuth, async (req, res) => {
   try {
     const userId = req.session.user.id;
     const isDbAdmin = req.session.user.role === 'admin';
 
+    // CAST(q.scheduled_at AS BIGINT) memaksa Turso mengirimkan angka murni saat LEFT JOIN
     const sql = isDbAdmin ? `
-      SELECT q.*, c.title AS channel_name, u.username 
+      SELECT 
+        q.id, q.title, q.description, q.tags, q.privacy_status, 
+        CAST(q.scheduled_at AS BIGINT) AS scheduled_at, 
+        q.file_path, q.youtube_id, q.status, q.error_message, q.channel_id, q.user_id,
+        c.title AS channel_name, u.username 
       FROM queue q 
       LEFT JOIN channels c ON q.channel_id = c.id 
       LEFT JOIN users u ON q.user_id = u.id
       ORDER BY q.id ASC
     ` : `
-      SELECT q.*, c.title AS channel_name 
+      SELECT 
+        q.id, q.title, q.description, q.tags, q.privacy_status, 
+        CAST(q.scheduled_at AS BIGINT) AS scheduled_at, 
+        q.file_path, q.youtube_id, q.status, q.error_message, q.channel_id, q.user_id,
+        c.title AS channel_name 
       FROM queue q 
       LEFT JOIN channels c ON q.channel_id = c.id 
       WHERE q.user_id = ?
