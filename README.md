@@ -43,3 +43,81 @@ TURSO_AUTH_TOKEN=your-turso-auth-token
 GOOGLE_CLIENT_ID=your-google-client-id.apps.googleusercontent.com
 GOOGLE_CLIENT_SECRET=your-google-client-secret
 GOOGLE_REDIRECT_URI=[https://your-domain.com/oauth2callback](https://your-domain.com/oauth2callback)
+
+====================================================================================================
+
+🚀 Cara Menjalankan Secara Lokal
+Clone repository ini:
+
+Bash
+git clone [https://github.com/username/yt-auto-scheduler.git](https://github.com/username/yt-auto-scheduler.git)
+cd yt-auto-scheduler
+Install dependensi:
+
+Bash
+npm install
+Jalankan aplikasi:
+
+Bash
+npm start
+Aplikasi akan berjalan di http://localhost:3000.
+
+🌐 Panduan Deployment (Render & UptimeRobot)
+1. Deploy ke Render.com
+Buat Web Service baru di Render.com.
+
+Hubungkan repository GitHub Anda.
+
+Masukkan konfigurasi berikut:
+
+Environment: Node
+
+Build Command: npm install
+
+Start Command: node server.js
+
+Tambahkan seluruh isi file .env ke bagian Environment Variables di Dashboard Render.
+
+Jalankan Deployment dan catat URL domain aplikasi Anda (misal: https://yt-scheduler.onrender.com).
+
+2. Konfigurasi Google Cloud Console
+Buka Google Cloud Console.
+
+Aktifkan YouTube Data API v3.
+
+Di menu OAuth 2.0 Credentials, tambahkan Authorized Redirect URIs:
+
+Plaintext
+[https://yt-scheduler.onrender.com/oauth2callback](https://yt-scheduler.onrender.com/oauth2callback)
+3. Menjaga Server 24/7 Aktif dengan UptimeRobot
+Layanan gratis seperti Render akan masuk ke mode sleep jika tidak ada aktivitas. Untuk menjaganya tetap Always-On agar Worker Scheduler tetap berjalan mengunggah video:
+
+Buat akun di UptimeRobot.
+
+Buat Monitor Baru dengan pengaturan:
+
+Monitor Type: HTTP(s)
+
+Friendly Name: YouTube Scheduler Engine
+
+URL (or IP): https://yt-scheduler.onrender.com/api/me
+
+Monitoring Interval: Every 5 minutes
+
+Simpan monitor. UptimeRobot akan mengirim ping secara berkala sehingga server Anda tidak pernah mati.
+
+📁 Struktur Direktori
+Plaintext
+├── database.js          # Inisialisasi dan koneksi ke Turso DB
+├── youtubeService.js    # Modul Autentikasi Google & Upload API YouTube
+├── scheduler.js         # Worker otomatis yang mengecek antrean setiap menit
+├── server.js            # Main Express Server & Endpoints API
+├── uploads/             # Folder direktori temporary berkas video
+├── public/
+│   ├── index.html       # Dashboard Utama User
+│   ├── admin.html       # Panel Admin Control & Approval
+│   └── login.html       # Halaman Login & Register
+├── .env                 # Environment variables
+└── README.md            # Dokumentasi proyek
+📄 Lisensi & Kontribusi
+Dikembangkan dan dipelihara oleh Buana Media. Hak cipta dilindungi undang-undang.
