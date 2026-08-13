@@ -14,7 +14,7 @@ require('dotenv').config();
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// --- PROXY SETTING UNTUK CLOUD DEPLOYMENT (RENDER/HEROKU) ---
+// --- PROXY SETTING UNTUK CLOUD DEPLOYMENT ---
 app.set('trust proxy', 1);
 
 // --- MIDDLEWARES ---
@@ -28,16 +28,14 @@ app.use(session({
   saveUninitialized: false,
   proxy: true,
   cookie: { 
-    maxAge: 24 * 60 * 60 * 1000, // 1 Hari
-    secure: process.env.NODE_ENV === 'production', // HTTPS di Render
-    sameSite: 'lax' // Memastikan cookie sesi tetap terbawa saat redirect OAuth
+    maxAge: 24 * 60 * 60 * 1000,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax'
   }
 }));
 
-// Buat direktori temporary uploads jika belum ada
 if (!fs.existsSync('./uploads')) fs.mkdirSync('./uploads');
 
-// Konfigurasi Multer dengan Batas Ukuran File (Maksimal 500 MB)
 const storage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, 'uploads/'),
   filename: (req, file, cb) => cb(null, `${Date.now()}-${file.originalname}`)
@@ -45,10 +43,9 @@ const storage = multer.diskStorage({
 
 const upload = multer({ 
   storage,
-  limits: { fileSize: 500 * 1024 * 1024 } // Batas maksimum 500 MB per file video
+  limits: { fileSize: 500 * 1024 * 1024 }
 });
 
-// Middleware Pembungkus Multer untuk Menangkap Error Limit File
 function handleFileUpload(req, res, next) {
   const uploadSingle = upload.single('video');
   uploadSingle(req, res, (err) => {
@@ -64,7 +61,6 @@ function handleFileUpload(req, res, next) {
   });
 }
 
-// --- MIDDLEWARES AUTHENTICATION & AUTHORIZATION ---
 function requireAuth(req, res, next) {
   if (!req.session || !req.session.user) {
     return res.status(401).json({ error: 'Unauthenticated' });
@@ -79,9 +75,36 @@ function requireAdmin(req, res, next) {
   next();
 }
 
+// --- FUNGSI FORMAT TANGGAL WIB TERPUSAT ---
+function formatToWIBString(rawVal) {
+  if (!rawVal) return '-';
+  let ms;
+  if (!isNaN(Number(rawVal))) {
+    ms = Number(rawVal);
+  } else {
+    ms = new Date(rawVal).getTime();
+  }
+  if (isNaN(ms)) return '-';
+
+  const d = new Date(ms);
+  const parts = new Intl.DateTimeFormat('id-ID', {
+    timeZone: 'Asia/Jakarta',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false
+  }).formatToParts(d);
+
+  const p = {};
+  parts.forEach(({ type, value }) => p[type] = value);
+  return `${p.day}/${p.month}/${p.year}, ${p.hour}.${p.minute}.${p.second}`;
+}
+
 // --- AUTH ROUTES ---
 
-// 1. Register User Baru (Turso Cloud)
 app.post('/api/register', async (req, res) => {
   try {
     const { username, password, email, whatsapp } = req.body;
@@ -90,8 +113,6 @@ app.post('/api/register', async (req, res) => {
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
-    
-    // Pendaftar pertama otomatis menjadi Admin & Langsung Approved
     const countRes = await turso.execute("SELECT COUNT(*) as cnt FROM users");
     const count = countRes.rows[0].cnt;
 
@@ -105,7 +126,7 @@ app.post('/api/register', async (req, res) => {
 
     const msg = role === 'admin' 
       ? 'Pendaftaran Admin berhasil! Silakan login.' 
-      : 'Pendaftaran berhasil! Akun Anda sedang menunggu persetujuan (approval) Admin.';
+      : 'Pendaftaran berhasil! Akun Anda sedang menunggu persetujuan Admin.';
 
     res.json({ message: msg });
   } catch (err) {
@@ -116,7 +137,6 @@ app.post('/api/register', async (req, res) => {
   }
 });
 
-// 2. Login User (Turso Cloud)
 app.post('/api/login', async (req, res) => {
   try {
     const { username, password } = req.body;
@@ -131,9 +151,8 @@ app.post('/api/login', async (req, res) => {
       return res.status(400).json({ error: 'Username atau Password salah!' });
     }
 
-    // Cek Persetujuan Admin untuk User Biasa
     if (user.role !== 'admin' && user.is_approved !== 1) {
-      return res.status(403).json({ error: 'Akun Anda belum disetujui/diaktifkan oleh Admin. Silakan hubungi admin.' });
+      return res.status(403).json({ error: 'Akun Anda belum disetujui/diaktifkan oleh Admin.' });
     }
 
     req.session.user = { id: user.id, username: user.username, role: user.role };
@@ -143,12 +162,10 @@ app.post('/api/login', async (req, res) => {
   }
 });
 
-// 3. Cek Sesi Pengguna Aktif
 app.get('/api/me', (req, res) => {
   res.json({ user: req.session.user || null });
 });
 
-// 4. Logout User
 app.post('/api/logout', (req, res) => {
   req.session.destroy();
   res.json({ success: true });
@@ -156,12 +173,10 @@ app.post('/api/logout', (req, res) => {
 
 // --- GOOGLE OAUTH ROUTES ---
 
-// Trigger Redirect ke Google OAuth
 app.get('/auth', requireAuth, (req, res) => {
   res.redirect(getAuthUrl());
 });
 
-// Callback dari Google OAuth (Menyimpan Channel ke User Aktif)
 app.get('/oauth2callback', async (req, res) => {
   const { code } = req.query;
   try {
@@ -181,7 +196,6 @@ app.get('/oauth2callback', async (req, res) => {
   }
 });
 
-// Get Daftar Channel Milik User (Turso Cloud)
 app.get('/channels', requireAuth, async (req, res) => {
   try {
     const userId = req.session.user.id;
@@ -195,7 +209,6 @@ app.get('/channels', requireAuth, async (req, res) => {
   }
 });
 
-// Hapus Koneksi Channel (Turso Cloud)
 app.delete('/channels/:id', requireAuth, async (req, res) => {
   try {
     const channelId = req.params.id;
@@ -227,9 +240,13 @@ const scheduleHandler = async (req, res) => {
       return res.status(400).json({ error: 'Pilih channel tujuan unggah!' });
     }
 
-    // SIMPAN TIMESTAMP MURNI TANPA SHIFT TIMEZONE
-    let timestamp = Number(scheduled_at);
-    if (isNaN(timestamp) || timestamp <= 0) {
+    // KONVERSI INPUT 'YYYY-MM-DDTHH:mm' KEDALAM TIMESTAMP WIB PERSISI (+07:00)
+    let timestamp;
+    if (!isNaN(Number(scheduled_at))) {
+      timestamp = Number(scheduled_at);
+    } else if (typeof scheduled_at === 'string' && scheduled_at.includes('T')) {
+      timestamp = new Date(`${scheduled_at}:00+07:00`).getTime();
+    } else {
       timestamp = new Date(scheduled_at).getTime();
     }
 
@@ -253,7 +270,6 @@ const scheduleHandler = async (req, res) => {
 app.post('/api/schedule', requireAuth, handleFileUpload, scheduleHandler);
 app.post('/schedule', requireAuth, handleFileUpload, scheduleHandler);
 
-// Get List Antrean Video - SINKRON LENGKAP BANTUAN DATA USER & CHANNEL
 app.get('/queue-status', requireAuth, async (req, res) => {
   try {
     const userId = req.session.user.id;
@@ -276,19 +292,11 @@ app.get('/queue-status', requireAuth, async (req, res) => {
     const userMap = {};
     usersRes.rows.forEach(u => userMap[u.id] = u.username);
 
+    // KITA KIRIM DICTIONARY DENGAN 'display_date' YANG DARI BACKEND
     const result = queueRes.rows.map(item => {
-      let rawVal = item.scheduled_at;
-      let finalNum = Number(rawVal);
-
-      // JIKA DB MENGEMBALIKAN STRING ISO (BERAKHIRAN Z / OFFSET), RAPIKAN KEMBALI
-      if (isNaN(finalNum) && typeof rawVal === 'string') {
-        const cleanIso = rawVal.replace('Z', '').replace(/\+\d{2}:\d{2}$/, '');
-        finalNum = new Date(cleanIso).getTime();
-      }
-
       return {
         ...item,
-        scheduled_at: finalNum,
+        display_date: formatToWIBString(item.scheduled_at),
         channel_name: channelMap[item.channel_id] || null,
         username: userMap[item.user_id] || null
       };
@@ -300,7 +308,6 @@ app.get('/queue-status', requireAuth, async (req, res) => {
   }
 });
 
-// Hapus Item Antrean Per-Baris (Turso Cloud)
 app.delete('/queue/:id', requireAuth, async (req, res) => {
   try {
     const { id } = req.params;
@@ -329,7 +336,6 @@ app.delete('/queue/:id', requireAuth, async (req, res) => {
   }
 });
 
-// Bersihkan Antrean Macet / Failed / Tanpa Channel (Turso Cloud)
 app.delete('/clear-stuck-queue', requireAuth, async (req, res) => {
   try {
     const userId = req.session.user.id;
@@ -417,8 +423,6 @@ app.delete('/api/admin/users/:id', requireAdmin, async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
-
-// --- WORKER & SERVER INIT ---
 
 initDb().then(() => {
   initScheduler();
