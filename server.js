@@ -206,7 +206,18 @@ const scheduleHandler = async (req, res) => {
       return res.status(400).json({ error: 'Pilih channel tujuan unggah!' });
     }
 
-    const timestamp = new Date(scheduled_at).getTime();
+    // --- PERBAIKAN TIMESTAMPS & ZONA WAKTU ---
+    let timestamp;
+    if (!isNaN(Number(scheduled_at))) {
+      // Jika dikirim dari frontend sebagai angka milidetik
+      timestamp = Number(scheduled_at);
+    } else {
+      // Jika dikirim sebagai string datetime (contoh: "2026-08-13T13:57")
+      // Mengubah string datetime lokal ke format ISO lengkap agar tepat dibaca Date()
+      const isIso = scheduled_at.includes('Z') || scheduled_at.includes('+');
+      timestamp = new Date(isIso ? scheduled_at : `${scheduled_at}:00`).getTime();
+    }
+
     if (isNaN(timestamp)) {
       return res.status(400).json({ error: 'Format tanggal/waktu tidak valid!' });
     }
@@ -315,7 +326,11 @@ app.delete('/clear-stuck-queue', requireAuth, async (req, res) => {
         AND user_id = ?
     `;
 
-    await isAdmin ? turso.execute(sqlDelete) : turso.execute({ sql: sqlDelete, args: [userId] });
+    if (isAdmin) {
+      await turso.execute(sqlDelete);
+    } else {
+      await turso.execute({ sql: sqlDelete, args: [userId] });
+    }
 
     res.json({ success: true, message: `Berhasil membersihkan data antrean.` });
   } catch (err) {
