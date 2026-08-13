@@ -295,23 +295,27 @@
 
           let actionBtn = `<button onclick="window.deleteQueue(${item.id})" class="bg-red-500 hover:bg-red-600 text-white text-xs px-3 py-1 rounded transition cursor-pointer font-medium">Hapus</button>`;
 
-          let displayDate = item.scheduled_at;
-          if (item.scheduled_at) {
-            const rawValue = !isNaN(item.scheduled_at) ? parseInt(item.scheduled_at) : item.scheduled_at;
-            const dateObj = new Date(rawValue);
-            
-            if (!isNaN(dateObj.getTime())) {
-              displayDate = dateObj.toLocaleString('id-ID', {
-                year: 'numeric',
-                month: 'numeric',
-                day: 'numeric',
-                hour: '2-digit',
-                minute: '2-digit',
-                second: '2-digit',
-                hour12: false
-              });
-            }
-          }
+         let displayDate = '-';
+if (item.scheduled_at) {
+  // Pastikan scheduled_at diubah ke tipe Number jika berupa string angka
+  const numTimestamp = Number(item.scheduled_at);
+  
+  const dateObj = !isNaN(numTimestamp) 
+    ? new Date(numTimestamp) 
+    : new Date(item.scheduled_at);
+
+  if (!isNaN(dateObj.getTime())) {
+    displayDate = dateObj.toLocaleString('id-ID', {
+      year: 'numeric',
+      month: 'numeric',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false
+    });
+  }
+}
 
           tbody.innerHTML += `
             <tr class="border-b">
