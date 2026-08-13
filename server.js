@@ -227,11 +227,9 @@ const scheduleHandler = async (req, res) => {
       return res.status(400).json({ error: 'Pilih channel tujuan unggah!' });
     }
 
-    // --- PARSING ANGKA TIMESTAMP MILIDETIK MURNI ---
-    let timestamp;
-    if (!isNaN(Number(scheduled_at))) {
-      timestamp = Number(scheduled_at);
-    } else {
+    // --- SIMPAN SELALU SEBAGAI ANGKA MILIDETIK MURNI ---
+    let timestamp = Number(scheduled_at);
+    if (isNaN(timestamp) || timestamp <= 0) {
       timestamp = new Date(scheduled_at).getTime();
     }
 
@@ -255,53 +253,51 @@ const scheduleHandler = async (req, res) => {
 app.post('/api/schedule', requireAuth, handleFileUpload, scheduleHandler);
 app.post('/schedule', requireAuth, handleFileUpload, scheduleHandler);
 
-// Get List Antrean Video (Turso Cloud) - SOLUSI SANITASI BEBAS PERBEDAN WIB/UTC
+// Get List Antrean Video (Solusi Murni Tanpa Masalah JOIN Turso)
 app.get('/queue-status', requireAuth, async (req, res) => {
   try {
     const userId = req.session.user.id;
     const isDbAdmin = req.session.user.role === 'admin';
 
-    const sql = isDbAdmin ? `
-      SELECT q.id, q.title, q.description, q.tags, q.privacy_status, 
-             q.scheduled_at, q.file_path, q.youtube_id, q.status, 
-             q.error_message, q.channel_id, q.user_id,
-             c.title AS channel_name, u.username 
-      FROM queue q 
-      LEFT JOIN channels c ON q.channel_id = c.id 
-      LEFT JOIN users u ON q.user_id = u.id
-      ORDER BY q.id ASC
-    ` : `
-      SELECT q.id, q.title, q.description, q.tags, q.privacy_status, 
-             q.scheduled_at, q.file_path, q.youtube_id, q.status, 
-             q.error_message, q.channel_id, q.user_id,
-             c.title AS channel_name 
-      FROM queue q 
-      LEFT JOIN channels c ON q.channel_id = c.id 
-      WHERE q.user_id = ?
-      ORDER BY q.id ASC
-    `;
+    // 1. Ambil data antrean utama tanpa JOIN (Menjamin scheduled_at murni bertipe Number)
+    const queueSql = isDbAdmin
+      ? `SELECT * FROM queue ORDER BY id ASC`
+      : `SELECT * FROM queue WHERE user_id = ? ORDER BY id ASC`;
 
-    const rowsRes = isDbAdmin ? await turso.execute(sql) : await turso.execute({ sql, args: [userId] });
-    
-    // PERBAIKAN UTAMA: Paksa setiap item 'scheduled_at' menjadi Angka Milidetik murni
-    const sanitizedRows = rowsRes.rows.map(row => {
-      let finalTimestamp = row.scheduled_at;
+    const queueRes = isDbAdmin 
+      ? await turso.execute(queueSql) 
+      : await turso.execute({ sql: queueSql, args: [userId] });
 
-      if (typeof row.scheduled_at === 'string') {
-        // Hapus 'Z' dan '+00:00' dari string ISO hasil LEFT JOIN agar Date() tidak menambah +7 jam ganda
-        const cleanStr = row.scheduled_at.replace('Z', '').replace('+00:00', '');
-        finalTimestamp = new Date(cleanStr).getTime();
-      } else if (typeof row.scheduled_at === 'bigint') {
-        finalTimestamp = Number(row.scheduled_at);
+    // 2. Ambil data pendukung channel & users untuk mapping
+    const channelsRes = await turso.execute(`SELECT id, title FROM channels`);
+    const usersRes = await turso.execute(`SELECT id, username FROM users`);
+
+    const channelMap = {};
+    channelsRes.rows.forEach(c => channelMap[c.id] = c.title);
+
+    const userMap = {};
+    usersRes.rows.forEach(u => userMap[u.id] = u.username);
+
+    // 3. Gabungkan data secara eksplisit di JavaScript
+    const result = queueRes.rows.map(item => {
+      // Jika karena suatu alasan Turso mengembalikan string ISO, konversi dengan aman
+      let rawVal = item.scheduled_at;
+      let finalNum = Number(rawVal);
+
+      if (isNaN(finalNum) && typeof rawVal === 'string') {
+        const cleanIso = rawVal.replace('Z', '').replace('+00:00', '');
+        finalNum = new Date(cleanIso).getTime();
       }
 
       return {
-        ...row,
-        scheduled_at: finalTimestamp
+        ...item,
+        scheduled_at: finalNum,
+        channel_name: channelMap[item.channel_id] || null,
+        username: userMap[item.user_id] || null
       };
     });
 
-    res.json(sanitizedRows);
+    res.json(result);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
