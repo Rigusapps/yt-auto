@@ -14,9 +14,6 @@ require('dotenv').config();
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Inisialisasi Tabel Turso saat aplikasi pertama kali berjalan
-initDb();
-
 // --- PROXY SETTING UNTUK CLOUD DEPLOYMENT (RENDER/HEROKU) ---
 app.set('trust proxy', 1);
 
@@ -29,9 +26,11 @@ app.use(session({
   secret: process.env.SESSION_SECRET || 'yt-scheduler-secret-key-12345',
   resave: false,
   saveUninitialized: false,
+  proxy: true,
   cookie: { 
     maxAge: 24 * 60 * 60 * 1000, // 1 Hari
-    secure: process.env.NODE_ENV === 'production' // Otomatis aktifkan secure cookie jika di Render (HTTPS)
+    secure: process.env.NODE_ENV === 'production', // HTTPS di Render
+    sameSite: 'lax' // Memastikan cookie sesi tetap terbawa saat redirect OAuth
   }
 }));
 
@@ -196,7 +195,6 @@ app.delete('/channels/:id', requireAuth, async (req, res) => {
 
 // --- QUEUE MANAGEMENT ROUTES ---
 
-// Tambah Video Baru ke Antrean (Mendukung Endpoint /api/schedule dan /schedule)
 const scheduleHandler = async (req, res) => {
   try {
     const { title, description, tags, privacy_status, scheduled_at, channel_id } = req.body;
@@ -270,12 +268,10 @@ app.delete('/queue/:id', requireAuth, async (req, res) => {
       return res.status(404).json({ error: 'Data tidak ditemukan' });
     }
 
-    // Cek Hak Akses
     if (!isAdmin && item.user_id !== userId) {
       return res.status(403).json({ error: 'Anda tidak memiliki akses menghapus antrean ini.' });
     }
 
-    // Hapus file fisik lokal
     if (item.file_path && fs.existsSync(item.file_path)) {
       try { fs.unlinkSync(item.file_path); } catch (e) {}
     }
@@ -319,7 +315,7 @@ app.delete('/clear-stuck-queue', requireAuth, async (req, res) => {
         AND user_id = ?
     `;
 
-    const result = isAdmin ? await turso.execute(sqlDelete) : await turso.execute({ sql: sqlDelete, args: [userId] });
+    await isAdmin ? turso.execute(sqlDelete) : turso.execute({ sql: sqlDelete, args: [userId] });
 
     res.json({ success: true, message: `Berhasil membersihkan data antrean.` });
   } catch (err) {
@@ -329,7 +325,6 @@ app.delete('/clear-stuck-queue', requireAuth, async (req, res) => {
 
 // --- ADMIN SPECIFIC ROUTES ---
 
-// Get Seluruh User untuk Admin (Turso Cloud)
 app.get('/api/admin/users', requireAdmin, async (req, res) => {
   try {
     const usersRes = await turso.execute('SELECT id, username, email, whatsapp, role, is_approved, created_at FROM users');
@@ -339,10 +334,9 @@ app.get('/api/admin/users', requireAdmin, async (req, res) => {
   }
 });
 
-// Approve / Setujui Akun User (Turso Cloud)
 app.post('/api/admin/approve/:id', requireAdmin, async (req, res) => {
   try {
-    const { is_approved } = req.body; // 1 = Disetujui, 0 = Ditangguhkan
+    const { is_approved } = req.body;
     await turso.execute({
       sql: 'UPDATE users SET is_approved = ? WHERE id = ?',
       args: [is_approved, req.params.id]
@@ -353,12 +347,10 @@ app.post('/api/admin/approve/:id', requireAdmin, async (req, res) => {
   }
 });
 
-// Hapus User oleh Admin (Turso Cloud)
 app.delete('/api/admin/users/:id', requireAdmin, async (req, res) => {
   try {
     const targetUserId = req.params.id;
 
-    // Bersihkan file-file antrean milik user ini sebelum menghapus user
     const userQueueRes = await turso.execute({ sql: 'SELECT file_path FROM queue WHERE user_id = ?', args: [targetUserId] });
     userQueueRes.rows.forEach(q => {
       if (q.file_path && fs.existsSync(q.file_path)) {
@@ -378,10 +370,12 @@ app.delete('/api/admin/users/:id', requireAdmin, async (req, res) => {
 
 // --- WORKER & SERVER INIT ---
 
-// Jalankan Worker Scheduler
-initScheduler();
-
-// Start Express Server
-app.listen(PORT, () => {
-  console.log(`Server berjalan di http://localhost:${PORT}`);
+// Pastikan Inisialisasi Database selesai sebelum server dan cron job dijalankan
+initDb().then(() => {
+  initScheduler();
+  app.listen(PORT, () => {
+    console.log(`Server berjalan di http://localhost:${PORT}`);
+  });
+}).catch(err => {
+  console.error("Gagal memulai server karena error database:", err);
 });
