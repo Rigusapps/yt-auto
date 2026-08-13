@@ -259,7 +259,7 @@
       }
     };
 
-    // --- LOAD ANTREAN VIDEO (PERBAIKAN FORMATTING KONSISTEN MURNI) ---
+    // --- LOAD ANTREAN VIDEO (PERBAIKAN TAMPILAN WAKTU) ---
     async function loadQueue() {
       try {
         const res = await fetch('/queue-status');
@@ -290,7 +290,7 @@
 
           let actionBtn = `<button onclick="window.deleteQueue(${item.id})" class="bg-red-500 hover:bg-red-600 text-white text-xs px-3 py-1 rounded transition cursor-pointer font-medium">Hapus</button>`;
 
-          // RENDERING PERSISI SAMA ANTARA USER DAN ADMIN
+          // RENDERING PRESISI SINKRON DENGAN DOKUMEN INPUT LOKAL
           let displayDate = '-';
           if (item.scheduled_at) {
             const ts = Number(item.scheduled_at);
@@ -341,7 +341,7 @@
       }
     };
 
-    // FORM SUBMIT (MENGIRIM TIMESTAMP LOKAL MURNI)
+    // --- FORM SUBMIT (PERBAIKAN INPUT MURNI TANPA SHIFT SHIFT TIMEZONE) ---
     document.getElementById('uploadForm').addEventListener('submit', function (e) {
       e.preventDefault();
       
@@ -351,7 +351,7 @@
 
       const scheduledAtInput = e.target.querySelector('input[name="scheduled_at"]').value;
       if (scheduledAtInput) {
-        // Konversi persisi "YYYY-MM-DDTHH:mm" ke Timestamp Lokal
+        // Parsing string 'YYYY-MM-DDTHH:mm' menjadi komponen absolut
         const parts = scheduledAtInput.split('T');
         if (parts.length === 2) {
           const dateParts = parts[0].split('-');
