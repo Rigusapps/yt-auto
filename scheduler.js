@@ -3,9 +3,49 @@ const cron = require('node-cron');
 const { turso } = require('./database');
 const { uploadVideoToYouTube } = require('./youtubeService');
 const fs = require('fs');
+const axios = require('axios');
+const { createClient } = require('@supabase/supabase-js');
+
+// Inisialisasi Supabase Client
+const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseKey = process.env.SUPABASE_KEY;
+const supabaseBucket = process.env.SUPABASE_BUCKET || 'youtube-uploads';
+const supabase = createClient(supabaseUrl, supabaseKey);
 
 // Flag untuk mencegah cron job berjalan berbarengan (Overlapping Execution)
 let isProcessing = false;
+
+// Fungsi Bantuan untuk Menghapus File (Mendukung Supabase & Lokal Disk)
+async function deleteFile(filePath) {
+  if (!filePath || typeof filePath !== 'string') return;
+
+  if (filePath.startsWith('http://') || filePath.startsWith('https://')) {
+    // Jika berupa URL Supabase
+    try {
+      if (filePath.includes(supabaseBucket)) {
+        const fileName = filePath.split('/').pop(); // Ambil nama file dari URL
+        const { error } = await supabase.storage.from(supabaseBucket).remove([fileName]);
+        if (error) {
+          console.error(`[Scheduler] Gagal hapus file dari Supabase (${fileName}):`, error.message);
+        } else {
+          console.log(`[Scheduler] 🧹 Berkas ${fileName} berhasil dibersihkan dari Supabase Storage.`);
+        }
+      }
+    } catch (err) {
+      console.error(`[Scheduler Warning] Gagal menghapus file Supabase:`, err.message);
+    }
+  } else {
+    // Jika berupa Berkas Lokal Disk
+    if (fs.existsSync(filePath)) {
+      try {
+        fs.unlinkSync(filePath);
+        console.log(`[Scheduler] Berkas fisik lokal ${filePath} berhasil dibersihkan.`);
+      } catch (unlinkErr) {
+        console.error(`[Scheduler Warning] Gagal menghapus berkas temporary lokal:`, unlinkErr.message);
+      }
+    }
+  }
+}
 
 function initScheduler() {
   // Cron expression '* * * * *' = Berjalan otomatis setiap 1 menit
@@ -46,20 +86,27 @@ function initScheduler() {
             throw new Error('Video tidak memiliki channel_id tujuan yang valid.');
           }
 
-          // Validasi fisik berkas sebelum memulai upload
-          if (!item.file_path || !fs.existsSync(item.file_path)) {
-            throw new Error(`Berkas video tidak ditemukan di server: ${item.file_path}`);
+          if (!item.file_path) {
+            throw new Error('Jalur berkas video (file_path) kosong.');
+          }
+
+          const isRemoteUrl = item.file_path.startsWith('http://') || item.file_path.startsWith('https://');
+
+          // Validasi ketersediaan berkas
+          if (!isRemoteUrl && !fs.existsSync(item.file_path)) {
+            throw new Error(`Berkas video lokal tidak ditemukan di server: ${item.file_path}`);
           }
 
           console.log(`[Scheduler] Memproses upload ID ${item.id}: "${item.title}" -> Channel ID: ${item.channel_id}`);
 
-          // 2. Tandai status menjadi 'Processing' agar tidak diproses ganda
+          // 2. Tandai status menjadi 'Processing' agar tidak diproses ganda oleh worker lain
           await turso.execute({
             sql: "UPDATE queue SET status = 'Processing' WHERE id = ?",
             args: [item.id]
           });
 
           // 3. Eksekusi upload ke YouTube via API v3
+          //    (youtubeService.js akan menerima item yang berisi file_path baik URL maupun lokal)
           const result = await uploadVideoToYouTube(item);
 
           // 4. Update status menjadi 'Completed' dan simpan YouTube Video ID
@@ -70,15 +117,8 @@ function initScheduler() {
 
           console.log(`[Scheduler] ✅ Berhasil upload ID ${item.id}. YouTube Video ID: ${result.id}`);
 
-          // 5. Hapus berkas video lokal di folder uploads setelah sukses
-          if (item.file_path && fs.existsSync(item.file_path)) {
-            try {
-              fs.unlinkSync(item.file_path);
-              console.log(`[Scheduler] Berkas fisik ${item.file_path} berhasil dibersihkan.`);
-            } catch (unlinkErr) {
-              console.error(`[Scheduler Warning] Gagal menghapus berkas temporary:`, unlinkErr.message);
-            }
-          }
+          // 5. Hapus berkas dari Supabase Storage / Lokal Disk setelah sukses upload
+          await deleteFile(item.file_path);
 
         } catch (error) {
           console.error(`[Scheduler Error] Gagal mengunggah ID ${item.id}:`, error.message);
@@ -89,12 +129,8 @@ function initScheduler() {
             args: [error.message, item.id]
           });
 
-          // Hapus juga berkas fisik jika gagal total agar disk server tidak penuh
-          if (item.file_path && fs.existsSync(item.file_path)) {
-            try {
-              fs.unlinkSync(item.file_path);
-            } catch (e) {}
-          }
+          // Hapus juga berkas fisik/Supabase jika gagal total agar storage tidak tersumbat
+          await deleteFile(item.file_path);
         }
       }
     } catch (err) {
