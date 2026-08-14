@@ -5,6 +5,7 @@ const bcrypt = require('bcryptjs');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
+const { createClient } = require('@supabase/supabase-js');
 const { turso, initDb } = require('./database');
 const { getAuthUrl, handleCallback } = require('./youtubeService');
 const initScheduler = require('./scheduler');
@@ -13,6 +14,17 @@ require('dotenv').config();
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+
+// --- INISIALISASI CLIENT SUPABASE STORAGE ---
+const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseKey = process.env.SUPABASE_KEY;
+const supabaseBucket = process.env.SUPABASE_BUCKET || 'youtube-uploads';
+
+if (!supabaseUrl || !supabaseKey) {
+  console.warn("⚠️ PERINGATAN: SUPABASE_URL atau SUPABASE_KEY belum diset di .env!");
+}
+
+const supabase = createClient(supabaseUrl, supabaseKey);
 
 // --- PROXY SETTING UNTUK CLOUD DEPLOYMENT ---
 app.set('trust proxy', 1);
@@ -34,6 +46,7 @@ app.use(session({
   }
 }));
 
+// Folder uploads lokal sementara sebelum terkirim ke Supabase
 if (!fs.existsSync('./uploads')) fs.mkdirSync('./uploads');
 
 const storage = multer.diskStorage({
@@ -101,6 +114,23 @@ function formatToWIBString(rawVal) {
   const p = {};
   parts.forEach(({ type, value }) => p[type] = value);
   return `${p.day}/${p.month}/${p.year}, ${p.hour}.${p.minute}.${p.second}`;
+}
+
+// --- FUNGSI BANTUAN UNTUK MEMBERSIHKAN BERKAS SUPABASE ---
+async function removeSupabaseFile(filePath) {
+  if (!filePath || typeof filePath !== 'string') return;
+  
+  if (filePath.includes(supabaseBucket)) {
+    try {
+      const fileName = filePath.split('/').pop();
+      await supabase.storage.from(supabaseBucket).remove([fileName]);
+      console.log(`🧹 File ${fileName} terhapus dari Supabase Storage.`);
+    } catch (e) {
+      console.error("Gagal menghapus file Supabase:", e.message);
+    }
+  } else if (fs.existsSync(filePath)) {
+    try { fs.unlinkSync(filePath); } catch (e) {}
+  }
 }
 
 // --- AUTH ROUTES ---
@@ -227,7 +257,7 @@ app.delete('/channels/:id', requireAuth, async (req, res) => {
   }
 });
 
-// --- QUEUE MANAGEMENT ROUTES ---
+// --- QUEUE MANAGEMENT ROUTES (INTEGRASI SUPABASE STORAGE) ---
 
 const scheduleHandler = async (req, res) => {
   try {
@@ -240,7 +270,35 @@ const scheduleHandler = async (req, res) => {
       return res.status(400).json({ error: 'Pilih channel tujuan unggah!' });
     }
 
-    // KONVERSI INPUT 'YYYY-MM-DDTHH:mm' KEDALAM TIMESTAMP WIB PERSISI (+07:00)
+    // 1. UPLOAD FILE BERKAS SEMENTARA KE SUPABASE STORAGE
+    const fileExtension = path.extname(req.file.originalname);
+    const fileName = `${Date.now()}-${Math.round(Math.random() * 1E9)}${fileExtension}`;
+    const fileBuffer = fs.readFileSync(req.file.path);
+
+    const { data: storageData, error: storageError } = await supabase.storage
+      .from(supabaseBucket)
+      .upload(fileName, fileBuffer, {
+        contentType: req.file.mimetype,
+        upsert: false
+      });
+
+    // Hapus file temporary di disk lokal server setelah sukses di-upload ke Supabase
+    if (fs.existsSync(req.file.path)) {
+      try { fs.unlinkSync(req.file.path); } catch (e) {}
+    }
+
+    if (storageError) {
+      return res.status(500).json({ error: `Gagal unggah ke Supabase Storage: ${storageError.message}` });
+    }
+
+    // Ambil Public URL berkas dari Supabase Storage
+    const { data: publicUrlData } = supabase.storage
+      .from(supabaseBucket)
+      .getPublicUrl(fileName);
+
+    const supabaseFilePath = publicUrlData.publicUrl;
+
+    // 2. PARSING TIMESTAMP WIB PRESISI (+07:00)
     let timestamp;
     if (!isNaN(Number(scheduled_at))) {
       timestamp = Number(scheduled_at);
@@ -256,12 +314,13 @@ const scheduleHandler = async (req, res) => {
 
     const userId = req.session.user.id;
 
+    // 3. SIMPAN PUBLIC URL SUPABASE KE TURSO DATABASE
     await turso.execute({
       sql: `INSERT INTO queue (title, description, tags, privacy_status, scheduled_at, file_path, channel_id, user_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      args: [title, description || '', tags || '', privacy_status || 'private', timestamp, req.file.path, channel_id, userId]
+      args: [title, description || '', tags || '', privacy_status || 'private', timestamp, supabaseFilePath, channel_id, userId]
     });
 
-    res.json({ message: 'Video berhasil ditambahkan ke antrean!' });
+    res.json({ message: 'Video berhasil ditambahkan ke antrean (Tersimpan di Cloud Storage)!' });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -292,7 +351,6 @@ app.get('/queue-status', requireAuth, async (req, res) => {
     const userMap = {};
     usersRes.rows.forEach(u => userMap[u.id] = u.username);
 
-    // KITA KIRIM DICTIONARY DENGAN 'display_date' YANG DARI BACKEND
     const result = queueRes.rows.map(item => {
       return {
         ...item,
@@ -325,9 +383,8 @@ app.delete('/queue/:id', requireAuth, async (req, res) => {
       return res.status(403).json({ error: 'Anda tidak memiliki akses menghapus antrean ini.' });
     }
 
-    if (item.file_path && fs.existsSync(item.file_path)) {
-      try { fs.unlinkSync(item.file_path); } catch (e) {}
-    }
+    // HAPUS BERKAS DARI SUPABASE/DISKS
+    await removeSupabaseFile(item.file_path);
 
     await turso.execute({ sql: 'DELETE FROM queue WHERE id = ?', args: [id] });
     res.json({ success: true, message: 'Berhasil dihapus' });
@@ -352,11 +409,9 @@ app.delete('/clear-stuck-queue', requireAuth, async (req, res) => {
 
     const stuckItemsRes = isAdmin ? await turso.execute(sqlSelect) : await turso.execute({ sql: sqlSelect, args: [userId] });
 
-    stuckItemsRes.rows.forEach(item => {
-      if (item.file_path && fs.existsSync(item.file_path)) {
-        try { fs.unlinkSync(item.file_path); } catch (e) {}
-      }
-    });
+    for (const item of stuckItemsRes.rows) {
+      await removeSupabaseFile(item.file_path);
+    }
 
     const sqlDelete = isAdmin ? `
       DELETE FROM queue 
@@ -408,11 +463,9 @@ app.delete('/api/admin/users/:id', requireAdmin, async (req, res) => {
     const targetUserId = req.params.id;
 
     const userQueueRes = await turso.execute({ sql: 'SELECT file_path FROM queue WHERE user_id = ?', args: [targetUserId] });
-    userQueueRes.rows.forEach(q => {
-      if (q.file_path && fs.existsSync(q.file_path)) {
-        try { fs.unlinkSync(q.file_path); } catch (e) {}
-      }
-    });
+    for (const q of userQueueRes.rows) {
+      await removeSupabaseFile(q.file_path);
+    }
 
     await turso.execute({ sql: 'DELETE FROM queue WHERE user_id = ?', args: [targetUserId] });
     await turso.execute({ sql: 'DELETE FROM channels WHERE user_id = ?', args: [targetUserId] });
