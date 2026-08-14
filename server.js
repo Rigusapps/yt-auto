@@ -116,6 +116,51 @@ function formatToWIBString(rawVal) {
   return `${p.day}/${p.month}/${p.year}, ${p.hour}.${p.minute}.${p.second}`;
 }
 
+// --- FUNGSI HELPER: UPLOAD CHUNKED / RESUMABLE DENGAN SUPABASE TUS PROTOCOL ---
+async function uploadFileChunkedToSupabase(filePath, fileName, mimeType) {
+  const tus = require('tus-js-client');
+  const fileStream = fs.createReadStream(filePath);
+  const fileSize = fs.statSync(filePath).size;
+
+  return new Promise((resolve, reject) => {
+    const upload = new tus.Upload(fileStream, {
+      endpoint: `${supabaseUrl}/storage/v1/upload/resumable`,
+      retryDelays: [0, 3000, 5000, 10000, 20000],
+      headers: {
+        authorization: `Bearer ${supabaseKey}`,
+        'x-upsert': 'true',
+      },
+      uploadDataDuringCreation: true,
+      removeFingerprintOnSuccess: true,
+      metadata: {
+        bucketName: supabaseBucket,
+        objectName: fileName,
+        contentType: mimeType,
+        cacheControl: '3600',
+      },
+      chunkSize: 6 * 1024 * 1024, // 6MB Chunk size (Melompati limit 50MB per request)
+      onError: (error) => {
+        console.error('❌ Error Upload Chunked TUS:', error);
+        reject(error);
+      },
+      onProgress: (bytesUploaded, bytesTotal) => {
+        const percentage = ((bytesUploaded / bytesTotal) * 100).toFixed(2);
+        console.log(`⏳ Upload Supabase Chunked (${fileName}): ${percentage}%`);
+      },
+      onSuccess: () => {
+        console.log(`✅ Upload Chunked Supabase Berhasil: ${fileName}`);
+        const { data: publicUrlData } = supabase.storage
+          .from(supabaseBucket)
+          .getPublicUrl(fileName);
+        
+        resolve(publicUrlData.publicUrl);
+      },
+    });
+
+    upload.start();
+  });
+}
+
 // --- FUNGSI BANTUAN UNTUK MEMBERSIHKAN BERKAS SUPABASE ---
 async function removeSupabaseFile(filePath) {
   if (!filePath || typeof filePath !== 'string') return;
@@ -257,7 +302,7 @@ app.delete('/channels/:id', requireAuth, async (req, res) => {
   }
 });
 
-// --- QUEUE MANAGEMENT ROUTES (INTEGRASI SUPABASE STORAGE) ---
+// --- QUEUE MANAGEMENT ROUTES (CHUNKING / MULTIPART UPLOAD SUPABASE) ---
 
 const scheduleHandler = async (req, res) => {
   try {
@@ -270,33 +315,29 @@ const scheduleHandler = async (req, res) => {
       return res.status(400).json({ error: 'Pilih channel tujuan unggah!' });
     }
 
-    // 1. UPLOAD FILE BERKAS SEMENTARA KE SUPABASE STORAGE
+    // 1. UPLOAD FILE BERKAS SEMENTARA DENGAN TUS CHUNKING PROTOCOL
     const fileExtension = path.extname(req.file.originalname);
     const fileName = `${Date.now()}-${Math.round(Math.random() * 1E9)}${fileExtension}`;
-    const fileBuffer = fs.readFileSync(req.file.path);
 
-    const { data: storageData, error: storageError } = await supabase.storage
-      .from(supabaseBucket)
-      .upload(fileName, fileBuffer, {
-        contentType: req.file.mimetype,
-        upsert: false
-      });
+    let supabaseFilePath;
+    try {
+      supabaseFilePath = await uploadFileChunkedToSupabase(
+        req.file.path,
+        fileName,
+        req.file.mimetype
+      );
+    } catch (uploadError) {
+      // Clean up lokal disk jika gagal
+      if (fs.existsSync(req.file.path)) {
+        try { fs.unlinkSync(req.file.path); } catch (e) {}
+      }
+      return res.status(500).json({ error: `Gagal upload chunked ke Supabase: ${uploadError.message}` });
+    }
 
     // Hapus file temporary di disk lokal server setelah sukses di-upload ke Supabase
     if (fs.existsSync(req.file.path)) {
       try { fs.unlinkSync(req.file.path); } catch (e) {}
     }
-
-    if (storageError) {
-      return res.status(500).json({ error: `Gagal unggah ke Supabase Storage: ${storageError.message}` });
-    }
-
-    // Ambil Public URL berkas dari Supabase Storage
-    const { data: publicUrlData } = supabase.storage
-      .from(supabaseBucket)
-      .getPublicUrl(fileName);
-
-    const supabaseFilePath = publicUrlData.publicUrl;
 
     // 2. PARSING TIMESTAMP WIB PRESISI (+07:00)
     let timestamp;
@@ -320,7 +361,7 @@ const scheduleHandler = async (req, res) => {
       args: [title, description || '', tags || '', privacy_status || 'private', timestamp, supabaseFilePath, channel_id, userId]
     });
 
-    res.json({ message: 'Video berhasil ditambahkan ke antrean (Tersimpan di Cloud Storage)!' });
+    res.json({ message: 'Video berhasil ditambahkan ke antrean (Tersimpan via Chunked Supabase Cloud)!' });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
