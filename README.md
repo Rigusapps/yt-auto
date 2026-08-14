@@ -1,137 +1,74 @@
 # 🚀 YouTube Multi-Channel Auto Uploader & Scheduler
 
-Aplikasi berbasis Node.js & Express untuk menjadwalkan dan mengunggah video ke banyak channel YouTube secara otomatis. Sistem dilengkapi dengan kontrol sesi pengguna, persetujuan admin, integrasi Google OAuth2, database terdistribusi Turso (LibSQL), serta sinkronisasi zona waktu WIB (`Asia/Jakarta`).
+Aplikasi berbasis **Node.js & Express** untuk mengelola, menjadwalkan, dan mengunggah video ke banyak channel YouTube secara otomatis. Sistem ini dilengkapi dengan kontrol akun multi-user, persetujuan admin, integrasi Google OAuth2, penyimpanan cloud temporary via **Cloudinary**, database terdistribusi **Turso (LibSQL)**, serta **penanganan zona waktu presisi (Asia/Jakarta - WIB)**.
 
 ---
 
 ## 📌 Fitur Utama
 
-- 🔐 **Multi-User & Role System**: Sistem pendaftaran user dengan persetujuan (approval) manual oleh Admin. Pendaftar pertama otomatis menjadi Admin.
-- 📺 **Multi-Channel YouTube Integration**: Setiap user dapat menghubungkan banyak channel YouTube menggunakan Google OAuth2.
-- ⏰ **Penjadwalan Presisi (WIB)**: Pemrosesan tanggal dan waktu tayang dikunci pada skala **WIB (UTC+7)** langsung dari backend untuk mencegah pergeseran jam antrean.
-- 🗄️ **Database Cloud (Turso/LibSQL)**: Penyimpanan data user, channel, dan antrean yang cepat dan terdistribusi.
-- 🔄 **Worker Background Scheduler**: Proses pemutakhiran dan pengunggahan otomatis yang berjalan di latar belakang secara berkelanjutan.
-- 🌐 **Deploy Ready & 24/7 Always-On**: Siap di-deploy ke platform seperti Render/Railway dan dijaga tetap aktif 24 jam menggunakan **UptimeRobot**.
+- 🔐 **Multi-User & Role System**: Pendaftaran akun baru dengan sistem persetujuan (*approval*) manual oleh Admin. Pendaftar pertama pada sistem otomatis mendapatkan hak akses **Admin**.
+- 📺 **Multi-Channel YouTube Integration**: Pengguna dapat menghubungkan beberapa channel YouTube menggunakan integrasi Google OAuth2.
+- ☁️ **Cloud Temporary Video Storage (Cloudinary)**: Penyimpanan berkas video sementara di cloud tanpa memakan disk lokal server. Bebas dari masalah *ephemeral storage* & hilangnya file saat re-deploy di platform cloud.
+- ⏰ **Centralized WIB Timezone Engine**: Pemrosesan jadwal tayang dikunci pada skala **WIB (UTC+7)** langsung dari *backend* untuk mencegah pergeseran jam antrean di browser/client.
+- 🗄️ **Cloud Database (Turso/LibSQL)**: Penyimpanan data pengguna, channel, dan entri jadwal antrean yang cepat, terdistribusi, serta handal.
+- 🔄 **Worker Background Scheduler & Auto-Cleanup**: Worker background (`node-cron`) yang memeriksa antrean setiap menit, mengunggah video ke YouTube via API, dan secara otomatis membersihkan berkas video dari Cloudinary setelah unggahan selesai atau gagal.
+- 🌐 **Automated CI/CD & Always-On 24/7**: Terhubung langsung dengan GitHub untuk *auto-deploy* ke Render.com dan dijaga tetap aktif 24 jam menggunakan **UptimeRobot**.
 
 ---
 
-## 🛠️ Teknologi yang Digunakan
+## 🏗️ Ekosistem & Arsitektur Sistem
 
-* **Backend**: Node.js, Express.js
-* **Database**: Turso DB (SQLite via LibSQL Client)
-* **Authentication**: Express Session, Bcrypt.js, Google OAuth2
-* **File Upload**: Multer
-* **YouTube Integration**: Googleapis (`youtube_v3`)
-* **Frontend**: HTML5, Vanilla JavaScript, Tailwind CSS (via CDN)
+Sistem ini dibangun dengan membagi peran secara terdistribusi untuk efisiensi, keamanan, dan keandalan tinggi:
+
+| Platform / Pustaka | Peran & Fungsi dalam Sistem |
+| :--- | :--- |
+| **GitHub** | **Penyimpan Kode Sumber (Source Code Repository)** sekaligus pemicu otomatisasi deployment (CI/CD) ke Render.com setiap ada pembaruan kode. |
+| **Render.com** | **Server Utama (Node.js App Host)** yang menjalankan `server.js` dan background worker `scheduler.js` secara 24/7. |
+| **Cloudinary** | **Penyimpanan Berkas Video (`.mp4`) Sementara** di cloud untuk menghindari terhapusnya berkas akibat *ephemeral storage* di server Render. |
+| **Turso DB (LibSQL)** | **Database Cloud Utama** untuk menyimpan data pengguna, kredensial token OAuth channel YouTube, dan status entri jadwal antrean video. |
+| **UptimeRobot** | **Layanan Penjaga Server** yang mengirimkan *ping* HTTP setiap 5 menit agar server Render.com tidak masuk ke mode *sleep*. |
+| **YouTube Data API v3** | **API Resmi Google/YouTube** untuk mengeksekusi pengunggahan video langsung ke channel tujuan. |
 
 ---
 
-## ⚙️ Persyaratan Sistem & Environment Variables
+## 💡 Penjelasan Masalah Storage & Zona Waktu (WIB)
 
-Buat file `.env` di direktori utama proyek Anda dan isi variabel berikut:
+### 1. Penanganan Ephemeral Storage (Cloudinary Integration)
+Di platform cloud container seperti Render.com, penyimpanan disk lokal bersifat *ephemeral* (sementara). Jika berkas disimpan di folder lokal server, berkas video akan terhapus saat server mengalami *restart* atau *re-deploy*.
+
+**Solusi Sistem:**
+1. Saat pengguna mengunggah video, berkas langsung dikirim ke **Cloudinary Storage**.
+2. URL Publik dari Cloudinary disimpan ke tabel `queue` di database **Turso**.
+3. Saat jadwal tayang tiba, worker `scheduler.js` mengambil *stream* berkas langsung dari URL Cloudinary dan mengirimkannya ke YouTube API.
+4. Setelah proses upload selesai (sukses/gagal), berkas di Cloudinary **otomatis dihapus** oleh worker untuk menghemat ruang penyimpanan cloud.
+
+### 2. Penanganan Presisi Zona Waktu WIB (UTC+7)
+Untuk menghindari pergeseran jam jadwal (+7 jam) akibat konversi tanggal lokal browser:
+1. `server.js` memproses seluruh masukan waktu menjadi timestamp UTC/WIB presisi (`Asia/Jakarta`).
+2. Server menyediakan properti `display_date` yang sudah diformat matang dari backend.
+3. Frontend hanya bertugas menampilkan teks siap pakai tanpa perlu mengolah kembali objek `Date`.
+
+---
+
+## ⚙️ Persyaratan Environment Variables (`.env`)
+
+Konfigurasikan variabel lingkungan berikut pada file `.env` lokal atau pada menu **Environment Variables** di Dashboard Render.com:
 
 ```env
+# Server Configuration
 PORT=3000
 SESSION_SECRET=yt-scheduler-secret-key-12345
 NODE_ENV=production
+TZ=Asia/Jakarta
 
-# Database Turso
-TURSO_DATABASE_URL=libsql://your-database-name.turso.io
+# Turso Cloud Database Credentials
+TURSO_DATABASE_URL=libsql://nama-database-anda.turso.io
 TURSO_AUTH_TOKEN=your-turso-auth-token
 
-# Google OAuth2 Credential
+# Cloudinary Storage Credentials
+CLOUDINARY_URL=cloudinary://API_KEY:API_SECRET@CLOUD_NAME
+
+# Google OAuth2 Credentials
 GOOGLE_CLIENT_ID=your-google-client-id.apps.googleusercontent.com
 GOOGLE_CLIENT_SECRET=your-google-client-secret
-GOOGLE_REDIRECT_URI=[https://your-domain.com/oauth2callback](https://your-domain.com/oauth2callback)
-
-```
-
----
-
-🚀 Cara Menjalankan Secara Lokal
-1. Clone repository ini:
-
-Bash
-git clone [https://github.com/username/yt-auto-scheduler.git](https://github.com/username/yt-auto-scheduler.git)
-cd yt-auto-scheduler
-
-2. Install dependensi:
-
-Bash
-npm install
-
-3. Jalankan aplikasi:
-
-Bash
-npm start
-
-Aplikasi akan berjalan di http://localhost:3000.
-
----
-
-🌐 Panduan Deployment (Render & UptimeRobot)
-
-1. Deploy ke Render.com
-  - Buat Web Service baru di Render.com.
-
-  - Hubungkan repository GitHub Anda.
-
-  - Masukkan konfigurasi berikut:
-
-      * Environment: Node
-
-      * Build Command: npm install
-
-      * Start Command: node server.js
-
-  - Tambahkan seluruh isi file .env ke bagian Environment Variables di Dashboard Render.
-
-  - Jalankan Deployment dan catat URL domain aplikasi Anda (misal: https://yt-scheduler.onrender.com).
-
-2. Konfigurasi Google Cloud Console
-  - Buka Google Cloud Console.
-
-  - Aktifkan YouTube Data API v3.
-
-  - Di menu OAuth 2.0 Credentials, tambahkan Authorized Redirect URIs:
-
-Plaintext
-[https://yt-scheduler.onrender.com/oauth2callback](https://yt-scheduler.onrender.com/oauth2callback)
-
-3. Menjaga Server 24/7 Aktif dengan UptimeRobot
-Layanan gratis seperti Render akan masuk ke mode sleep jika tidak ada aktivitas. Untuk menjaganya tetap Always-On agar Worker Scheduler tetap berjalan mengunggah video:
-
-  - Buat akun di UptimeRobot.
-
-  - Buat Monitor Baru dengan pengaturan:
-
-      * Monitor Type: HTTP(s)
-
-      * Friendly Name: YouTube Scheduler Engine
-
-      * URL (or IP): https://yt-scheduler.onrender.com/api/me
-
-      * Monitoring Interval: Every 5 minutes
-
-  - Simpan monitor. UptimeRobot akan mengirim ping secara berkala sehingga server Anda tidak pernah mati.
-
----
-
-📁 Struktur Direktori
-Plaintext
-├── database.js          # Inisialisasi dan koneksi ke Turso DB
-├── youtubeService.js    # Modul Autentikasi Google & Upload API YouTube
-├── scheduler.js         # Worker otomatis yang mengecek antrean setiap menit
-├── server.js            # Main Express Server & Endpoints API
-├── uploads/             # Folder direktori temporary berkas video
-├── public/
-│   ├── index.html       # Dashboard Utama User
-│   ├── admin.html       # Panel Admin Control & Approval
-│   └── login.html       # Halaman Login & Register
-├── .env                 # Environment variables
-└── README.md            # Dokumentasi proyek
-
----
-
-📄 Lisensi & Kontribusi
-Dikembangkan dan dipelihara oleh Buana Media. Hak cipta dilindungi undang-undang.
+GOOGLE_REDIRECT_URI=[https://domain-anda.com/oauth2callback](https://domain-anda.com/oauth2callback)
