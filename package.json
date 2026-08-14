@@ -13,7 +13,8 @@
     "scheduler",
     "automation",
     "express",
-    "turso"
+    "turso",
+    "supabase"
   ],
   "author": "Buana Media",
   "license": "ISC",
@@ -21,6 +22,8 @@
   "dependencies": {
     "@googleapis/youtube": "^34.0.0",
     "@libsql/client": "^0.14.0",
+    "@supabase/supabase-js": "^2.48.0",
+    "axios": "^1.7.9",
     "bcryptjs": "^3.0.3",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
