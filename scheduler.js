@@ -3,36 +3,31 @@ const cron = require('node-cron');
 const { turso } = require('./database');
 const { uploadVideoToYouTube } = require('./youtubeService');
 const fs = require('fs');
-const axios = require('axios');
-const { createClient } = require('@supabase/supabase-js');
+const cloudinary = require('cloudinary').v2;
 
-// Inisialisasi Supabase Client
-const supabaseUrl = process.env.SUPABASE_URL;
-const supabaseKey = process.env.SUPABASE_KEY;
-const supabaseBucket = process.env.SUPABASE_BUCKET || 'youtube-uploads';
-const supabase = createClient(supabaseUrl, supabaseKey);
+// Konfigurasi Cloudinary dari .env
+cloudinary.config();
 
 // Flag untuk mencegah cron job berjalan berbarengan (Overlapping Execution)
 let isProcessing = false;
 
-// Fungsi Bantuan untuk Menghapus File (Mendukung Supabase & Lokal Disk)
+// Fungsi Bantuan untuk Menghapus File dari Cloudinary atau Disk Lokal
 async function deleteFile(filePath) {
   if (!filePath || typeof filePath !== 'string') return;
 
-  if (filePath.startsWith('http://') || filePath.startsWith('https://')) {
-    // Jika berupa URL Supabase
+  if (filePath.includes('cloudinary.com')) {
     try {
-      if (filePath.includes(supabaseBucket)) {
-        const fileName = filePath.split('/').pop(); // Ambil nama file dari URL
-        const { error } = await supabase.storage.from(supabaseBucket).remove([fileName]);
-        if (error) {
-          console.error(`[Scheduler] Gagal hapus file dari Supabase (${fileName}):`, error.message);
-        } else {
-          console.log(`[Scheduler] 🧹 Berkas ${fileName} berhasil dibersihkan dari Supabase Storage.`);
-        }
+      // Ekstraksi Public ID secara presisi dari URL Cloudinary
+      const regex = /\/v\d+\/(.+)\.[a-z0-9]+$/i;
+      const match = filePath.match(regex);
+      const publicId = match ? match[1] : null;
+
+      if (publicId) {
+        await cloudinary.uploader.destroy(publicId, { resource_type: 'video' });
+        console.log(`[Scheduler] 🧹 Berkas ${publicId} berhasil dibersihkan dari Cloudinary Storage.`);
       }
     } catch (err) {
-      console.error(`[Scheduler Warning] Gagal menghapus file Supabase:`, err.message);
+      console.error(`[Scheduler Warning] Gagal menghapus file Cloudinary:`, err.message);
     }
   } else {
     // Jika berupa Berkas Lokal Disk
@@ -92,7 +87,7 @@ function initScheduler() {
 
           const isRemoteUrl = item.file_path.startsWith('http://') || item.file_path.startsWith('https://');
 
-          // Validasi ketersediaan berkas
+          // Validasi ketersediaan berkas jika lokal
           if (!isRemoteUrl && !fs.existsSync(item.file_path)) {
             throw new Error(`Berkas video lokal tidak ditemukan di server: ${item.file_path}`);
           }
@@ -106,7 +101,6 @@ function initScheduler() {
           });
 
           // 3. Eksekusi upload ke YouTube via API v3
-          //    (youtubeService.js akan menerima item yang berisi file_path baik URL maupun lokal)
           const result = await uploadVideoToYouTube(item);
 
           // 4. Update status menjadi 'Completed' dan simpan YouTube Video ID
@@ -117,7 +111,7 @@ function initScheduler() {
 
           console.log(`[Scheduler] ✅ Berhasil upload ID ${item.id}. YouTube Video ID: ${result.id}`);
 
-          // 5. Hapus berkas dari Supabase Storage / Lokal Disk setelah sukses upload
+          // 5. Hapus berkas dari Cloudinary / Lokal Disk setelah sukses upload
           await deleteFile(item.file_path);
 
         } catch (error) {
@@ -129,7 +123,7 @@ function initScheduler() {
             args: [error.message, item.id]
           });
 
-          // Hapus juga berkas fisik/Supabase jika gagal total agar storage tidak tersumbat
+          // Hapus juga berkas fisik/Cloudinary jika gagal total agar storage tidak tersumbat
           await deleteFile(item.file_path);
         }
       }
