@@ -5,7 +5,7 @@ const bcrypt = require('bcryptjs');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
-const { createClient } = require('@supabase/supabase-js');
+const cloudinary = require('cloudinary').v2;
 const { turso, initDb } = require('./database');
 const { getAuthUrl, handleCallback } = require('./youtubeService');
 const initScheduler = require('./scheduler');
@@ -15,16 +15,8 @@ require('dotenv').config();
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// --- INISIALISASI CLIENT SUPABASE STORAGE ---
-const supabaseUrl = process.env.SUPABASE_URL;
-const supabaseKey = process.env.SUPABASE_KEY;
-const supabaseBucket = process.env.SUPABASE_BUCKET || 'youtube-uploads';
-
-if (!supabaseUrl || !supabaseKey) {
-  console.warn("⚠️ PERINGATAN: SUPABASE_URL atau SUPABASE_KEY belum diset di .env!");
-}
-
-const supabase = createClient(supabaseUrl, supabaseKey);
+// Config Cloudinary (Otomatis membaca CLOUDINARY_URL dari .env)
+cloudinary.config();
 
 // --- PROXY SETTING UNTUK CLOUD DEPLOYMENT ---
 app.set('trust proxy', 1);
@@ -46,7 +38,7 @@ app.use(session({
   }
 }));
 
-// Folder uploads lokal sementara sebelum terkirim ke Supabase
+// Folder uploads lokal sementara sebelum terkirim ke Cloudinary
 if (!fs.existsSync('./uploads')) fs.mkdirSync('./uploads');
 
 const storage = multer.diskStorage({
@@ -116,62 +108,21 @@ function formatToWIBString(rawVal) {
   return `${p.day}/${p.month}/${p.year}, ${p.hour}.${p.minute}.${p.second}`;
 }
 
-// --- FUNGSI HELPER: UPLOAD CHUNKED / RESUMABLE DENGAN SUPABASE TUS PROTOCOL ---
-async function uploadFileChunkedToSupabase(filePath, fileName, mimeType) {
-  const tus = require('tus-js-client');
-  const fileStream = fs.createReadStream(filePath);
-  const fileSize = fs.statSync(filePath).size;
-
-  return new Promise((resolve, reject) => {
-    const upload = new tus.Upload(fileStream, {
-      endpoint: `${supabaseUrl}/storage/v1/upload/resumable`,
-      retryDelays: [0, 3000, 5000, 10000, 20000],
-      headers: {
-        authorization: `Bearer ${supabaseKey}`,
-        'x-upsert': 'true',
-      },
-      uploadDataDuringCreation: true,
-      removeFingerprintOnSuccess: true,
-      metadata: {
-        bucketName: supabaseBucket,
-        objectName: fileName,
-        contentType: mimeType,
-        cacheControl: '3600',
-      },
-      chunkSize: 6 * 1024 * 1024, // 6MB Chunk size (Melompati limit 50MB per request)
-      onError: (error) => {
-        console.error('❌ Error Upload Chunked TUS:', error);
-        reject(error);
-      },
-      onProgress: (bytesUploaded, bytesTotal) => {
-        const percentage = ((bytesUploaded / bytesTotal) * 100).toFixed(2);
-        console.log(`⏳ Upload Supabase Chunked (${fileName}): ${percentage}%`);
-      },
-      onSuccess: () => {
-        console.log(`✅ Upload Chunked Supabase Berhasil: ${fileName}`);
-        const { data: publicUrlData } = supabase.storage
-          .from(supabaseBucket)
-          .getPublicUrl(fileName);
-        
-        resolve(publicUrlData.publicUrl);
-      },
-    });
-
-    upload.start();
-  });
-}
-
-// --- FUNGSI BANTUAN UNTUK MEMBERSIHKAN BERKAS SUPABASE ---
-async function removeSupabaseFile(filePath) {
+// --- FUNGSI MEMBERSIHKAN BERKAS DARI CLOUDINARY / DISK ---
+async function removeCloudinaryFile(filePath) {
   if (!filePath || typeof filePath !== 'string') return;
-  
-  if (filePath.includes(supabaseBucket)) {
+
+  if (filePath.includes('cloudinary.com')) {
     try {
-      const fileName = filePath.split('/').pop();
-      await supabase.storage.from(supabaseBucket).remove([fileName]);
-      console.log(`🧹 File ${fileName} terhapus dari Supabase Storage.`);
+      // Ambil public_id dari URL Cloudinary
+      const parts = filePath.split('/');
+      const filenameWithExt = parts[parts.length - 1];
+      const publicId = `youtube-uploads/${filenameWithExt.split('.')[0]}`;
+      
+      await cloudinary.uploader.destroy(publicId, { resource_type: 'video' });
+      console.log(`🧹 File ${publicId} terhapus dari Cloudinary Storage.`);
     } catch (e) {
-      console.error("Gagal menghapus file Supabase:", e.message);
+      console.error("Gagal menghapus file Cloudinary:", e.message);
     }
   } else if (fs.existsSync(filePath)) {
     try { fs.unlinkSync(filePath); } catch (e) {}
@@ -302,7 +253,7 @@ app.delete('/channels/:id', requireAuth, async (req, res) => {
   }
 });
 
-// --- QUEUE MANAGEMENT ROUTES (CHUNKING / MULTIPART UPLOAD SUPABASE) ---
+// --- QUEUE MANAGEMENT ROUTES (CLOUDINARY STORAGE) ---
 
 const scheduleHandler = async (req, res) => {
   try {
@@ -315,29 +266,26 @@ const scheduleHandler = async (req, res) => {
       return res.status(400).json({ error: 'Pilih channel tujuan unggah!' });
     }
 
-    // 1. UPLOAD FILE BERKAS SEMENTARA DENGAN TUS CHUNKING PROTOCOL
-    const fileExtension = path.extname(req.file.originalname);
-    const fileName = `${Date.now()}-${Math.round(Math.random() * 1E9)}${fileExtension}`;
-
-    let supabaseFilePath;
+    // 1. UPLOAD FILE KE CLOUDINARY
+    let cloudResult;
     try {
-      supabaseFilePath = await uploadFileChunkedToSupabase(
-        req.file.path,
-        fileName,
-        req.file.mimetype
-      );
-    } catch (uploadError) {
-      // Clean up lokal disk jika gagal
+      cloudResult = await cloudinary.uploader.upload(req.file.path, {
+        resource_type: 'video',
+        folder: 'youtube-uploads'
+      });
+    } catch (cloudErr) {
       if (fs.existsSync(req.file.path)) {
         try { fs.unlinkSync(req.file.path); } catch (e) {}
       }
-      return res.status(500).json({ error: `Gagal upload chunked ke Supabase: ${uploadError.message}` });
+      return res.status(500).json({ error: `Gagal upload ke Cloudinary: ${cloudErr.message}` });
     }
 
-    // Hapus file temporary di disk lokal server setelah sukses di-upload ke Supabase
+    // Hapus file temporary di lokal server
     if (fs.existsSync(req.file.path)) {
       try { fs.unlinkSync(req.file.path); } catch (e) {}
     }
+
+    const videoPublicUrl = cloudResult.secure_url;
 
     // 2. PARSING TIMESTAMP WIB PRESISI (+07:00)
     let timestamp;
@@ -355,13 +303,13 @@ const scheduleHandler = async (req, res) => {
 
     const userId = req.session.user.id;
 
-    // 3. SIMPAN PUBLIC URL SUPABASE KE TURSO DATABASE
+    // 3. SIMPAN PUBLIC URL CLOUDINARY KE TURSO DATABASE
     await turso.execute({
       sql: `INSERT INTO queue (title, description, tags, privacy_status, scheduled_at, file_path, channel_id, user_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      args: [title, description || '', tags || '', privacy_status || 'private', timestamp, supabaseFilePath, channel_id, userId]
+      args: [title, description || '', tags || '', privacy_status || 'private', timestamp, videoPublicUrl, channel_id, userId]
     });
 
-    res.json({ message: 'Video berhasil ditambahkan ke antrean (Tersimpan via Chunked Supabase Cloud)!' });
+    res.json({ message: 'Video berhasil ditambahkan ke antrean (Tersimpan di Cloudinary Cloud)!' });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -424,8 +372,7 @@ app.delete('/queue/:id', requireAuth, async (req, res) => {
       return res.status(403).json({ error: 'Anda tidak memiliki akses menghapus antrean ini.' });
     }
 
-    // HAPUS BERKAS DARI SUPABASE/DISKS
-    await removeSupabaseFile(item.file_path);
+    await removeCloudinaryFile(item.file_path);
 
     await turso.execute({ sql: 'DELETE FROM queue WHERE id = ?', args: [id] });
     res.json({ success: true, message: 'Berhasil dihapus' });
@@ -451,7 +398,7 @@ app.delete('/clear-stuck-queue', requireAuth, async (req, res) => {
     const stuckItemsRes = isAdmin ? await turso.execute(sqlSelect) : await turso.execute({ sql: sqlSelect, args: [userId] });
 
     for (const item of stuckItemsRes.rows) {
-      await removeSupabaseFile(item.file_path);
+      await removeCloudinaryFile(item.file_path);
     }
 
     const sqlDelete = isAdmin ? `
@@ -505,7 +452,7 @@ app.delete('/api/admin/users/:id', requireAdmin, async (req, res) => {
 
     const userQueueRes = await turso.execute({ sql: 'SELECT file_path FROM queue WHERE user_id = ?', args: [targetUserId] });
     for (const q of userQueueRes.rows) {
-      await removeSupabaseFile(q.file_path);
+      await removeCloudinaryFile(q.file_path);
     }
 
     await turso.execute({ sql: 'DELETE FROM queue WHERE user_id = ?', args: [targetUserId] });
