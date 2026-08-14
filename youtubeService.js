@@ -2,7 +2,7 @@
 const { youtube } = require('@googleapis/youtube');
 const { OAuth2Client } = require('google-auth-library');
 const fs = require('fs');
-// 1. Destructure turso directly from database.js
+const axios = require('axios');
 const { turso } = require('./database');
 require('dotenv').config();
 
@@ -10,7 +10,7 @@ require('dotenv').config();
 const oauth2Client = new OAuth2Client(
   process.env.GOOGLE_CLIENT_ID,
   process.env.GOOGLE_CLIENT_SECRET,
-  process.env.REDIRECT_URI
+  process.env.GOOGLE_REDIRECT_URI || process.env.REDIRECT_URI
 );
 
 // 1. Fungsi untuk mendapatkan URL Authentikasi Google
@@ -51,7 +51,6 @@ async function handleCallback(code, userId) {
   const avatarUrl = channel.snippet.thumbnails.default.url;
   const refreshToken = tokens.refresh_token;
 
-  // PERBAIKAN: Gunakan turso.execute dengan await
   await turso.execute({
     sql: `
       INSERT INTO channels (id, title, avatar_url, refresh_token, user_id)
@@ -68,13 +67,12 @@ async function handleCallback(code, userId) {
   return { id: channelId, title, avatarUrl };
 }
 
-// 3. Fungsi untuk menyiapkan Client YouTube khusus berdasarkan channel_id (Dibuat ASYNC)
+// 3. Fungsi untuk menyiapkan Client YouTube khusus berdasarkan channel_id (ASYNC)
 async function getAuthenticatedClient(channelId) {
   if (!channelId) {
     throw new Error('Channel ID tidak ditentukan!');
   }
 
-  // PERBAIKAN: Gunakan turso.execute secara async
   const result = await turso.execute({
     sql: 'SELECT refresh_token FROM channels WHERE id = ?',
     args: [channelId]
@@ -89,7 +87,7 @@ async function getAuthenticatedClient(channelId) {
   const client = new OAuth2Client(
     process.env.GOOGLE_CLIENT_ID,
     process.env.GOOGLE_CLIENT_SECRET,
-    process.env.REDIRECT_URI
+    process.env.GOOGLE_REDIRECT_URI || process.env.REDIRECT_URI
   );
 
   client.setCredentials({
@@ -99,10 +97,29 @@ async function getAuthenticatedClient(channelId) {
   return youtube({ version: 'v3', auth: client });
 }
 
-// 4. Fungsi utama untuk upload video ke YouTube berdasarkan channel_id
+// 4. Fungsi utama untuk upload video ke YouTube (Mendukung Supabase URL Stream & File Lokal)
 async function uploadVideoToYouTube(videoData) {
-  // PERBAIKAN: Tambahkan await karena getAuthenticatedClient sekarang async
   const yt = await getAuthenticatedClient(videoData.channel_id);
+
+  let videoStream;
+  const filePath = videoData.file_path;
+
+  // Cek apakah file_path berupa Remote URL dari Supabase Storage (http:// atau https://)
+  if (filePath && (filePath.startsWith('http://') || filePath.startsWith('https://'))) {
+    console.log(`[YouTube Service] Mengambil stream berkas dari Supabase URL: ${filePath}`);
+    const response = await axios({
+      method: 'get',
+      url: filePath,
+      responseType: 'stream'
+    });
+    videoStream = response.data;
+  } else {
+    // Pembacaan berkas fisik lokal biasa (fallback)
+    if (!fs.existsSync(filePath)) {
+      throw new Error(`Berkas video lokal tidak ditemukan: ${filePath}`);
+    }
+    videoStream = fs.createReadStream(filePath);
+  }
 
   const response = await yt.videos.insert({
     part: ['snippet', 'status'],
@@ -113,11 +130,11 @@ async function uploadVideoToYouTube(videoData) {
         tags: videoData.tags ? videoData.tags.split(',').map(t => t.trim()) : []
       },
       status: {
-        privacyStatus: videoData.privacy_status
+        privacyStatus: videoData.privacy_status || 'private'
       }
     },
     media: {
-      body: fs.createReadStream(videoData.file_path)
+      body: videoStream
     }
   });
 
