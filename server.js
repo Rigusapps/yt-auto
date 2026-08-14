@@ -108,19 +108,21 @@ function formatToWIBString(rawVal) {
   return `${p.day}/${p.month}/${p.year}, ${p.hour}.${p.minute}.${p.second}`;
 }
 
-// --- FUNGSI MEMBERSIHKAN BERKAS DARI CLOUDINARY / DISK ---
+// --- FUNGSI MEMBERSIHKAN BERKAS DARI CLOUDINARY / DISK (PRESISI) ---
 async function removeCloudinaryFile(filePath) {
   if (!filePath || typeof filePath !== 'string') return;
 
   if (filePath.includes('cloudinary.com')) {
     try {
-      // Ambil public_id dari URL Cloudinary
-      const parts = filePath.split('/');
-      const filenameWithExt = parts[parts.length - 1];
-      const publicId = `youtube-uploads/${filenameWithExt.split('.')[0]}`;
-      
-      await cloudinary.uploader.destroy(publicId, { resource_type: 'video' });
-      console.log(`🧹 File ${publicId} terhapus dari Cloudinary Storage.`);
+      // Ekstraksi Public ID secara presisi dari URL Cloudinary
+      const regex = /\/v\d+\/(.+)\.[a-z0-9]+$/i;
+      const match = filePath.match(regex);
+      const publicId = match ? match[1] : null;
+
+      if (publicId) {
+        await cloudinary.uploader.destroy(publicId, { resource_type: 'video' });
+        console.log(`🧹 File ${publicId} terhapus dari Cloudinary Storage.`);
+      }
     } catch (e) {
       console.error("Gagal menghapus file Cloudinary:", e.message);
     }
