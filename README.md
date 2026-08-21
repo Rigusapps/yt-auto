@@ -1,4 +1,4 @@
-# 🚀 YouTube Multi-Channel Auto Uploader & Scheduler
+# 🚀 YouTube Auto Uploader & Scheduler
 
 Aplikasi berbasis **Node.js & Express** untuk mengelola, menjadwalkan, dan mengunggah video ke banyak channel YouTube secara otomatis. Sistem ini dilengkapi dengan kontrol akun multi-user, persetujuan admin, integrasi Google OAuth2, penyimpanan cloud temporary via **Cloudinary**, database terdistribusi **Turso (LibSQL)**, serta **penanganan zona waktu presisi (Asia/Jakarta - WIB)**.
 
