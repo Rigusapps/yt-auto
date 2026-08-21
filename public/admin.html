@@ -6,68 +6,76 @@
   <title>Admin Panel - Kelola User & Approval</title>
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body class="bg-gray-100 min-h-screen p-8 space-y-8">
-  
-  <div class="max-w-6xl mx-auto bg-white p-6 rounded-lg shadow space-y-6">
-    
+<body class="bg-gray-100 min-h-screen p-3 sm:p-6 md:p-8 antialiased">
+
+  <div class="max-w-6xl mx-auto bg-white p-4 sm:p-6 rounded-lg shadow space-y-6">
+
     <!-- Header Admin -->
-    <div class="flex justify-between items-center border-b pb-4">
+    <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 border-b pb-4">
       <div>
-        <h1 class="text-2xl font-bold text-gray-800">Admin Panel Control</h1>
-        <p class="text-xs text-gray-500">Konfirmasi, kelola hak akses akun, serta pantau seluruh antrean sistem</p>
+        <h1 class="text-xl sm:text-2xl font-bold text-gray-800 leading-tight">Admin Panel Control</h1>
+        <p class="text-xs sm:text-sm text-gray-500 mt-0.5">Konfirmasi, kelola hak akses akun, serta pantau seluruh antrean sistem</p>
       </div>
-      <a href="/" class="bg-gray-600 hover:bg-gray-700 text-white text-xs px-3 py-2 rounded font-medium transition">
+      <a href="/" class="self-start sm:self-auto bg-gray-600 hover:bg-gray-700 text-white text-xs px-3.5 py-2 rounded font-medium transition whitespace-nowrap shadow-sm">
         ← Kembali ke Dashboard
       </a>
     </div>
 
     <!-- Tabel 1: Daftar Pengguna & Approval -->
-    <div class="overflow-x-auto">
-      <h2 class="text-lg font-semibold mb-3">Daftar Pengguna & Permintaan Persetujuan</h2>
-      <table class="w-full text-left border-collapse text-sm">
-        <thead>
-          <tr class="bg-gray-50 border-b text-gray-700">
-            <th class="p-3">ID</th>
-            <th class="p-3">Username</th>
-            <th class="p-3">Email</th>
-            <th class="p-3">WhatsApp</th>
-            <th class="p-3">Role</th>
-            <th class="p-3">Status Akses</th>
-            <th class="p-3">Aksi Konfirmasi</th>
-          </tr>
-        </thead>
-        <tbody id="userTableBody">
-          <tr><td colspan="7" class="p-4 text-center text-gray-400">Memuat data pengguna...</td></tr>
-        </tbody>
-      </table>
+    <div>
+      <h2 class="text-base sm:text-lg font-semibold mb-3 text-gray-800">Daftar Pengguna & Permintaan Persetujuan</h2>
+      <div class="overflow-x-auto -mx-4 sm:mx-0">
+        <div class="inline-block min-w-full align-middle px-4 sm:px-0">
+          <table class="min-w-full text-left border-collapse text-xs sm:text-sm">
+            <thead>
+              <tr class="bg-gray-50 border-b text-gray-700">
+                <th class="p-2.5 sm:p-3 whitespace-nowrap">ID</th>
+                <th class="p-2.5 sm:p-3 whitespace-nowrap">Username</th>
+                <th class="p-2.5 sm:p-3 whitespace-nowrap">Email</th>
+                <th class="p-2.5 sm:p-3 whitespace-nowrap">WhatsApp</th>
+                <th class="p-2.5 sm:p-3 whitespace-nowrap">Role</th>
+                <th class="p-2.5 sm:p-3 whitespace-nowrap">Status Akses</th>
+                <th class="p-2.5 sm:p-3 whitespace-nowrap">Aksi Konfirmasi</th>
+              </tr>
+            </thead>
+            <tbody id="userTableBody" class="divide-y divide-gray-100">
+              <tr><td colspan="7" class="p-4 text-center text-gray-400">Memuat data pengguna...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
     </div>
 
     <!-- Tabel 2: Monitor Antrean Semua User (Backend Centralized Formatting) -->
-    <div class="overflow-x-auto pt-6 border-t">
-      <div class="flex justify-between items-center mb-3">
-        <h2 class="text-lg font-semibold">Monitor Antrean Semua Video (System Wide)</h2>
-        <button onclick="window.clearStuckQueue()" class="bg-red-100 hover:bg-red-200 text-red-700 text-xs px-3 py-1.5 rounded transition cursor-pointer font-medium">
+    <div class="pt-6 border-t">
+      <div class="flex flex-col sm:flex-row justify-between sm:items-center gap-2 mb-3">
+        <h2 class="text-base sm:text-lg font-semibold text-gray-800">Monitor Antrean Semua Video (System Wide)</h2>
+        <button onclick="window.clearStuckQueue()" class="self-start sm:self-auto bg-red-100 hover:bg-red-200 text-red-700 text-xs px-3 py-1.5 rounded transition cursor-pointer font-medium whitespace-nowrap">
           Bersihkan Macet / Tanpa Channel
         </button>
       </div>
-      <table class="w-full text-left border-collapse text-sm">
-        <thead>
-          <tr class="bg-gray-50 border-b text-gray-700">
-            <th class="p-3">ID</th>
-            <th class="p-3">User Pemilik</th>
-            <th class="p-3">Channel</th>
-            <th class="p-3">Judul</th>
-            <th class="p-3">Jadwal Tayang (WIB)</th>
-            <th class="p-3">Privasi</th>
-            <th class="p-3">Status</th>
-            <th class="p-3">Info/Hasil</th>
-            <th class="p-3">Aksi</th>
-          </tr>
-        </thead>
-        <tbody id="queueTableBody">
-          <tr><td colspan="9" class="p-4 text-center text-gray-400">Memuat antrean sistem...</td></tr>
-        </tbody>
-      </table>
+      <div class="overflow-x-auto -mx-4 sm:mx-0">
+        <div class="inline-block min-w-full align-middle px-4 sm:px-0">
+          <table class="min-w-full text-left border-collapse text-xs sm:text-sm">
+            <thead>
+              <tr class="bg-gray-50 border-b text-gray-700">
+                <th class="p-2.5 sm:p-3 whitespace-nowrap">ID</th>
+                <th class="p-2.5 sm:p-3 whitespace-nowrap">User Pemilik</th>
+                <th class="p-2.5 sm:p-3 whitespace-nowrap">Channel</th>
+                <th class="p-2.5 sm:p-3 whitespace-nowrap">Judul</th>
+                <th class="p-2.5 sm:p-3 whitespace-nowrap">Jadwal Tayang (WIB)</th>
+                <th class="p-2.5 sm:p-3 whitespace-nowrap">Privasi</th>
+                <th class="p-2.5 sm:p-3 whitespace-nowrap">Status</th>
+                <th class="p-2.5 sm:p-3 whitespace-nowrap">Info/Hasil</th>
+                <th class="p-2.5 sm:p-3 whitespace-nowrap">Aksi</th>
+              </tr>
+            </thead>
+            <tbody id="queueTableBody" class="divide-y divide-gray-100">
+              <tr><td colspan="9" class="p-4 text-center text-gray-400">Memuat antrean sistem...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
     </div>
 
   </div>
@@ -94,35 +102,35 @@
 
         users.forEach(u => {
           let statusBadge = u.is_approved === 1 
-            ? `<span class="bg-green-100 text-green-800 text-xs px-2.5 py-1 rounded-full font-semibold">✓ Disetujui</span>`
-            : `<span class="bg-yellow-100 text-yellow-800 text-xs px-2.5 py-1 rounded-full font-semibold">⏳ Menunggu</span>`;
+            ? `<span class="bg-green-100 text-green-800 text-xs px-2.5 py-1 rounded-full font-semibold whitespace-nowrap">✓ Disetujui</span>`
+            : `<span class="bg-yellow-100 text-yellow-800 text-xs px-2.5 py-1 rounded-full font-semibold whitespace-nowrap">⏳ Menunggu</span>`;
 
           let approvalBtn = '-';
           if (u.role !== 'admin') {
             if (u.is_approved === 1) {
-              approvalBtn = `<button onclick="toggleApprove(${u.id}, 0)" class="bg-amber-500 hover:bg-amber-600 text-white text-xs px-2.5 py-1 rounded cursor-pointer font-medium">Tangguhkan</button>`;
+              approvalBtn = `<button onclick="toggleApprove(${u.id}, 0)" class="bg-amber-500 hover:bg-amber-600 text-white text-xs px-2.5 py-1 rounded cursor-pointer font-medium whitespace-nowrap">Tangguhkan</button>`;
             } else {
-              approvalBtn = `<button onclick="toggleApprove(${u.id}, 1)" class="bg-green-600 hover:bg-green-700 text-white text-xs px-2.5 py-1 rounded cursor-pointer font-medium">Setujui Akun</button>`;
+              approvalBtn = `<button onclick="toggleApprove(${u.id}, 1)" class="bg-green-600 hover:bg-green-700 text-white text-xs px-2.5 py-1 rounded cursor-pointer font-medium whitespace-nowrap">Setujui Akun</button>`;
             }
           }
 
           let deleteBtn = u.role !== 'admin' 
-            ? `<button onclick="deleteUser(${u.id})" class="bg-red-500 hover:bg-red-600 text-white text-xs px-2.5 py-1 rounded cursor-pointer font-medium ml-1">Hapus</button>` 
+            ? `<button onclick="deleteUser(${u.id})" class="bg-red-500 hover:bg-red-600 text-white text-xs px-2.5 py-1 rounded cursor-pointer font-medium ml-1 whitespace-nowrap">Hapus</button>` 
             : '';
 
           let cleanWa = u.whatsapp ? u.whatsapp.replace(/[^0-9]/g, '') : '';
           if (cleanWa.startsWith('0')) cleanWa = '62' + cleanWa.slice(1);
-          let waLink = cleanWa ? `<a href="https://wa.me/${cleanWa}" target="_blank" class="text-green-600 font-medium underline">${u.whatsapp}</a>` : '-';
+          let waLink = cleanWa ? `<a href="https://wa.me/${cleanWa}" target="_blank" class="text-green-600 font-medium underline whitespace-nowrap">${u.whatsapp}</a>` : '-';
 
           tbody.innerHTML += `
-            <tr class="border-b">
-              <td class="p-3">${u.id}</td>
-              <td class="p-3 font-semibold text-gray-800">${u.username}</td>
-              <td class="p-3">${u.email || '-'}</td>
-              <td class="p-3">${waLink}</td>
-              <td class="p-3"><span class="px-2 py-0.5 bg-blue-100 text-blue-800 rounded text-xs capitalize font-medium">${u.role}</span></td>
-              <td class="p-3">${statusBadge}</td>
-              <td class="p-3 flex items-center">${approvalBtn} ${deleteBtn}</td>
+            <tr class="border-b hover:bg-gray-50 transition">
+              <td class="p-2.5 sm:p-3">${u.id}</td>
+              <td class="p-2.5 sm:p-3 font-semibold text-gray-800 whitespace-nowrap">${u.username}</td>
+              <td class="p-2.5 sm:p-3 whitespace-nowrap">${u.email || '-'}</td>
+              <td class="p-2.5 sm:p-3">${waLink}</td>
+              <td class="p-2.5 sm:p-3 whitespace-nowrap"><span class="px-2 py-0.5 bg-blue-100 text-blue-800 rounded text-xs capitalize font-medium">${u.role}</span></td>
+              <td class="p-2.5 sm:p-3">${statusBadge}</td>
+              <td class="p-2.5 sm:p-3 flex items-center whitespace-nowrap">${approvalBtn} ${deleteBtn}</td>
             </tr>
           `;
         });
@@ -176,14 +184,14 @@
 
         queue.forEach((item, index) => {
           let statusBadge = '';
-          if (item.status === 'Pending') statusBadge = `<span class="bg-yellow-100 text-yellow-800 text-xs px-2 py-1 rounded font-medium">Pending</span>`;
-          else if (item.status === 'Processing') statusBadge = `<span class="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded font-medium">Processing</span>`;
-          else if (item.status === 'Completed') statusBadge = `<span class="bg-green-100 text-green-800 text-xs px-2 py-1 rounded font-medium">Completed</span>`;
-          else statusBadge = `<span class="bg-red-100 text-red-800 text-xs px-2 py-1 rounded font-medium">Failed</span>`;
+          if (item.status === 'Pending') statusBadge = `<span class="bg-yellow-100 text-yellow-800 text-xs px-2 py-0.5 rounded font-medium whitespace-nowrap">Pending</span>`;
+          else if (item.status === 'Processing') statusBadge = `<span class="bg-blue-100 text-blue-800 text-xs px-2 py-0.5 rounded font-medium whitespace-nowrap">Processing</span>`;
+          else if (item.status === 'Completed') statusBadge = `<span class="bg-green-100 text-green-800 text-xs px-2 py-0.5 rounded font-medium whitespace-nowrap">Completed</span>`;
+          else statusBadge = `<span class="bg-red-100 text-red-800 text-xs px-2 py-0.5 rounded font-medium whitespace-nowrap">Failed</span>`;
 
           let info = '-';
           if (item.youtube_id) {
-            info = `<a href="https://youtu.be/${item.youtube_id}" target="_blank" class="text-blue-600 underline font-medium">Lihat Video</a>`;
+            info = `<a href="https://youtu.be/${item.youtube_id}" target="_blank" class="text-blue-600 underline font-medium whitespace-nowrap">Lihat Video</a>`;
           } else if (item.error_message) {
             info = `<span class="text-red-500 text-xs">${item.error_message}</span>`;
           }
@@ -192,16 +200,16 @@
           const displayDate = item.display_date || '-';
 
           tbody.innerHTML += `
-            <tr class="border-b">
-              <td class="p-3">${index + 1}</td>
-              <td class="p-3 font-semibold text-blue-600">${item.username || 'System'}</td>
-              <td class="p-3 font-medium text-gray-700">${item.channel_name || '<span class="text-red-500 font-normal">Tanpa Channel</span>'}</td>
-              <td class="p-3 font-medium">${item.title}</td>
-              <td class="p-3 font-semibold text-gray-800">${displayDate}</td>
-              <td class="p-3 capitalize">${item.privacy_status}</td>
-              <td class="p-3">${statusBadge}</td>
-              <td class="p-3">${info}</td>
-              <td class="p-3">
+            <tr class="border-b hover:bg-gray-50 transition">
+              <td class="p-2.5 sm:p-3">${index + 1}</td>
+              <td class="p-2.5 sm:p-3 font-semibold text-blue-600 whitespace-nowrap">${item.username || 'System'}</td>
+              <td class="p-2.5 sm:p-3 font-medium text-gray-700 whitespace-nowrap">${item.channel_name || '<span class="text-red-500 font-normal">Tanpa Channel</span>'}</td>
+              <td class="p-2.5 sm:p-3 font-medium min-w-[140px]">${item.title}</td>
+              <td class="p-2.5 sm:p-3 font-semibold text-gray-800 whitespace-nowrap">${displayDate}</td>
+              <td class="p-2.5 sm:p-3 capitalize whitespace-nowrap">${item.privacy_status}</td>
+              <td class="p-2.5 sm:p-3">${statusBadge}</td>
+              <td class="p-2.5 sm:p-3">${info}</td>
+              <td class="p-2.5 sm:p-3 whitespace-nowrap">
                 <button onclick="window.deleteQueue(${item.id})" class="bg-red-500 hover:bg-red-600 text-white text-xs px-2.5 py-1 rounded transition cursor-pointer font-medium">Hapus</button>
               </td>
             </tr>
