@@ -6,73 +6,75 @@
   <title>YouTube Auto-Scheduler (Multi-Channel)</title>
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body class="bg-gray-100 min-h-screen flex flex-col justify-between">
-  
-  <div class="max-w-5xl mx-auto p-8 space-y-8 w-full">
-    
+<body class="bg-gray-100 min-h-screen flex flex-col justify-between antialiased">
+
+  <div class="max-w-5xl mx-auto p-4 sm:p-6 md:p-8 space-y-4 sm:space-y-6 md:space-y-8 w-full">
+
     <!-- User Bar Header -->
-    <div class="bg-slate-800 text-white p-3 px-6 rounded-lg shadow flex justify-between items-center text-xs">
-      <div id="userInfo" class="font-medium flex items-center gap-2">
+    <div class="bg-slate-800 text-white p-3 sm:px-6 rounded-lg shadow flex flex-wrap justify-between items-center gap-2 text-xs">
+      <div id="userInfo" class="font-medium flex items-center gap-2 flex-wrap">
         <span>Memuat data user...</span>
       </div>
-      <div id="userNav" class="flex items-center gap-3">
+      <div id="userNav" class="flex items-center gap-2 sm:gap-3 ml-auto">
       </div>
     </div>
 
     <!-- Header Actions & Listbox Channel -->
-    <div class="bg-white p-6 rounded-lg shadow flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+    <div class="bg-white p-4 sm:p-6 rounded-lg shadow flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
       <div>
-        <h1 class="text-2xl font-bold text-gray-800">YouTube Auto Uploader</h1>
-        <p class="text-sm text-gray-500">Sistem Antrean Multi-Channel & Penjadwalan Otomatis</p>
+        <h1 class="text-xl sm:text-2xl font-bold text-gray-800 leading-tight">YouTube Auto Uploader</h1>
+        <p class="text-xs sm:text-sm text-gray-500 mt-0.5">Sistem Antrean Multi-Channel & Penjadwalan Otomatis</p>
       </div>
-      
-      <div class="flex items-center gap-2 w-full md:w-auto">
-        <div class="relative flex-1 md:w-64">
+
+      <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full lg:w-auto">
+        <div class="relative flex-1 lg:w-64">
           <select id="connectedChannelsListbox" class="w-full border text-xs p-2.5 rounded-lg bg-gray-50 text-gray-800 border-gray-300 font-medium focus:ring-2 focus:ring-blue-500 outline-none">
             <option value="">-- Memuat Channel --</option>
           </select>
         </div>
-        
-        <button onclick="window.deleteSelectedChannel()" class="bg-red-100 hover:bg-red-200 text-red-600 border border-red-200 text-xs px-3 py-2.5 rounded-lg font-semibold transition cursor-pointer whitespace-nowrap" title="Hapus channel yang dipilih">
-          Hapus Channel
-        </button>
 
-        <a href="/auth" class="bg-blue-600 hover:bg-blue-700 text-white text-xs px-3.5 py-2.5 rounded-lg font-semibold transition flex items-center gap-1 whitespace-nowrap">
-          + Tambah Channel
-        </a>
+        <div class="flex items-center gap-2">
+          <button onclick="window.deleteSelectedChannel()" class="flex-1 sm:flex-initial text-center bg-red-100 hover:bg-red-200 text-red-600 border border-red-200 text-xs px-3 py-2.5 rounded-lg font-semibold transition cursor-pointer whitespace-nowrap" title="Hapus channel yang dipilih">
+            Hapus Channel
+          </button>
+
+          <a href="/auth" class="flex-1 sm:flex-initial text-center justify-center bg-blue-600 hover:bg-blue-700 text-white text-xs px-3.5 py-2.5 rounded-lg font-semibold transition flex items-center gap-1 whitespace-nowrap">
+            + Tambah Channel
+          </a>
+        </div>
       </div>
     </div>
 
     <!-- Form Jadwal Video Baru -->
-    <div class="bg-white p-6 rounded-lg shadow">
-      <h2 class="text-lg font-semibold mb-4 border-b pb-2">Jadwalkan Video Baru</h2>
+    <div class="bg-white p-4 sm:p-6 rounded-lg shadow">
+      <h2 class="text-base sm:text-lg font-semibold mb-4 border-b pb-2 text-gray-800">Jadwalkan Video Baru</h2>
       <form id="uploadForm" class="grid grid-cols-1 md:grid-cols-2 gap-4">
-        
+
         <div class="md:col-span-2">
-          <label class="block text-sm font-medium mb-1">Pilih Channel Tujuan</label>
-          <select name="channel_id" id="channelSelect" required class="w-full border p-2 rounded bg-white">
+          <label class="block text-xs sm:text-sm font-medium mb-1 text-gray-700">Pilih Channel Tujuan</label>
+          <select name="channel_id" id="channelSelect" required class="w-full border text-xs sm:text-sm p-2.5 rounded bg-white border-gray-300 focus:ring-2 focus:ring-blue-500 outline-none">
             <option value="">-- Pilih Channel --</option>
           </select>
         </div>
 
         <div class="md:col-span-2">
-          <label class="block text-sm font-medium mb-1">Pilih Video</label>
-          <input type="file" name="video" accept="video/*" required class="w-full border p-2 rounded">
+          <label class="block text-xs sm:text-sm font-medium mb-1 text-gray-700">Pilih Video</label>
+          <input type="file" name="video" accept="video/*" required class="w-full border text-xs sm:text-sm p-2 rounded border-gray-300 file:mr-3 file:py-1.5 file:px-3 file:rounded file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 cursor-pointer">
         </div>
 
         <div>
-          <label class="block text-sm font-medium mb-1">Judul Video</label>
-          <input type="text" name="title" required class="w-full border p-2 rounded" placeholder="Judul video...">
+          <label class="block text-xs sm:text-sm font-medium mb-1 text-gray-700">Judul Video</label>
+          <input type="text" name="title" required class="w-full border text-xs sm:text-sm p-2.5 rounded border-gray-300 focus:ring-2 focus:ring-blue-500 outline-none" placeholder="Judul video...">
         </div>
 
         <div>
-          <label class="block text-sm font-medium mb-1">Waktu Tayang (Jadwal)</label>
-          <input type="datetime-local" name="scheduled_at" required class="w-full border p-2 rounded">
+          <label class="block text-xs sm:text-sm font-medium mb-1 text-gray-700">Waktu Tayang (Jadwal)</label>
+          <input type="datetime-local" name="scheduled_at" required class="w-full border text-xs sm:text-sm p-2.5 rounded border-gray-300 focus:ring-2 focus:ring-blue-500 outline-none">
         </div>
 
         <div>
-          <label class="block text-sm font-medium mb-1">Status Privasi</label>
-          <select name="privacy_status" class="w-full border p-2 rounded">
+          <label class="block text-xs sm:text-sm font-medium mb-1 text-gray-700">Status Privasi</label>
+          <select name="privacy_status" class="w-full border text-xs sm:text-sm p-2.5 rounded bg-white border-gray-300 focus:ring-2 focus:ring-blue-500 outline-none">
             <option value="public">Public</option>
             <option value="private">Private</option>
             <option value="unlisted">Unlisted</option>
@@ -80,17 +82,17 @@
         </div>
 
         <div>
-          <label class="block text-sm font-medium mb-1">Tags (Pisahkan koma)</label>
-          <input type="text" name="tags" class="w-full border p-2 rounded" placeholder="gaming, tutorial, nodejs">
+          <label class="block text-xs sm:text-sm font-medium mb-1 text-gray-700">Tags (Pisahkan koma)</label>
+          <input type="text" name="tags" class="w-full border text-xs sm:text-sm p-2.5 rounded border-gray-300 focus:ring-2 focus:ring-blue-500 outline-none" placeholder="gaming, tutorial, nodejs">
         </div>
 
         <div class="md:col-span-2">
-          <label class="block text-sm font-medium mb-1">Deskripsi</label>
-          <textarea name="description" rows="3" class="w-full border p-2 rounded" placeholder="Deskripsi video..."></textarea>
+          <label class="block text-xs sm:text-sm font-medium mb-1 text-gray-700">Deskripsi</label>
+          <textarea name="description" rows="3" class="w-full border text-xs sm:text-sm p-2.5 rounded border-gray-300 focus:ring-2 focus:ring-blue-500 outline-none" placeholder="Deskripsi video..."></textarea>
         </div>
 
-        <div class="md:col-span-2">
-          <button type="submit" class="bg-blue-600 text-white px-6 py-2 rounded hover:bg-blue-700 w-full font-medium cursor-pointer transition">
+        <div class="md:col-span-2 pt-2">
+          <button type="submit" class="bg-blue-600 text-white px-6 py-2.5 rounded hover:bg-blue-700 w-full font-medium text-xs sm:text-sm cursor-pointer transition shadow-sm">
             Masukkan ke Antrean
           </button>
         </div>
@@ -98,44 +100,46 @@
     </div>
 
     <!-- Tabel Antrean Video -->
-    <div class="bg-white p-6 rounded-lg shadow">
-      <div class="flex justify-between items-center mb-4 border-b pb-2">
-        <h2 class="text-lg font-semibold">Tabel Antrean Video</h2>
-        <button onclick="window.clearStuckQueue()" class="bg-red-100 hover:bg-red-200 text-red-700 text-xs px-3 py-1.5 rounded transition cursor-pointer font-medium">
+    <div class="bg-white p-4 sm:p-6 rounded-lg shadow">
+      <div class="flex flex-col sm:flex-row justify-between sm:items-center gap-2 mb-4 border-b pb-3">
+        <h2 class="text-base sm:text-lg font-semibold text-gray-800">Tabel Antrean Video</h2>
+        <button onclick="window.clearStuckQueue()" class="self-start sm:self-auto bg-red-100 hover:bg-red-200 text-red-700 text-xs px-3 py-1.5 rounded transition cursor-pointer font-medium">
            Bersihkan Macet / Tanpa Channel
         </button>
       </div>
-      <div class="overflow-x-auto">
-        <table class="w-full text-left text-sm border-collapse">
-          <thead>
-            <tr class="bg-gray-50 border-b">
-              <th class="p-3">ID</th>
-              <th class="p-3">Channel</th>
-              <th class="p-3">Judul</th>
-              <th class="p-3">Jadwal Tayang</th>
-              <th class="p-3">Privasi</th>
-              <th class="p-3">Status</th>
-              <th class="p-3">Info/Hasil</th>
-              <th class="p-3">Aksi</th>
-            </tr>
-          </thead>
-          <tbody id="queueTableBody">
-            <tr><td colspan="8" class="p-4 text-center text-gray-400">Memuat antrean...</td></tr>
-          </tbody>
-        </table>
+      <div class="overflow-x-auto -mx-4 sm:mx-0">
+        <div class="inline-block min-w-full align-middle px-4 sm:px-0">
+          <table class="min-w-full text-left text-xs sm:text-sm border-collapse">
+            <thead>
+              <tr class="bg-gray-50 border-b text-gray-600">
+                <th class="p-2.5 sm:p-3 whitespace-nowrap">ID</th>
+                <th class="p-2.5 sm:p-3 whitespace-nowrap">Channel</th>
+                <th class="p-2.5 sm:p-3 whitespace-nowrap">Judul</th>
+                <th class="p-2.5 sm:p-3 whitespace-nowrap">Jadwal Tayang</th>
+                <th class="p-2.5 sm:p-3 whitespace-nowrap">Privasi</th>
+                <th class="p-2.5 sm:p-3 whitespace-nowrap">Status</th>
+                <th class="p-2.5 sm:p-3 whitespace-nowrap">Info/Hasil</th>
+                <th class="p-2.5 sm:p-3 whitespace-nowrap">Aksi</th>
+              </tr>
+            </thead>
+            <tbody id="queueTableBody" class="divide-y divide-gray-100">
+              <tr><td colspan="8" class="p-4 text-center text-gray-400">Memuat antrean...</td></tr>
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
 
   </div>
 
   <!-- Footer -->
-  <footer class="bg-white border-t border-gray-200 mt-12 py-6">
-    <div class="max-w-5xl mx-auto px-8 flex flex-col md:flex-row justify-between items-center gap-4 text-xs text-gray-500">
+  <footer class="bg-white border-t border-gray-200 mt-8 sm:mt-12 py-6">
+    <div class="max-w-5xl mx-auto px-4 sm:px-8 flex flex-col md:flex-row justify-between items-center gap-4 text-xs text-gray-500 text-center md:text-left">
       <div>
         <p class="font-semibold text-gray-700">YouTube Auto Uploader & Scheduler v2.0</p>
         <p>&copy; 2026 Integrated Local Automation Engine. All rights reserved.</p>
       </div>
-      <div class="flex items-center gap-4">
+      <div class="flex flex-wrap justify-center items-center gap-3 sm:gap-4">
         <span class="inline-flex items-center gap-1.5 text-green-600 bg-green-50 px-2.5 py-1 rounded-full font-medium">
           <span class="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span> Server Running
         </span>
@@ -161,13 +165,13 @@
         }
 
         document.getElementById('userInfo').innerHTML = `
-          <span>👤 User Login: <strong class="text-blue-300">${data.user.username}</strong></span>
+          <span>👤 User: <strong class="text-blue-300">${data.user.username}</strong></span>
           <span class="bg-slate-700 px-2 py-0.5 rounded text-[10px] uppercase font-bold text-slate-300">${data.user.role}</span>
         `;
 
         const userNav = document.getElementById('userNav');
         userNav.innerHTML = '';
-        
+
         if (data.user.role === 'admin') {
           userNav.innerHTML += `<a href="/admin.html" class="bg-purple-600 hover:bg-purple-700 text-white px-2.5 py-1 rounded font-medium transition">Panel Admin</a>`;
         }
@@ -189,7 +193,7 @@
       try {
         const res = await fetch('/channels');
         if (res.status === 401 || !res.ok) return;
-        
+
         const channels = await res.json();
         const listbox = document.getElementById('connectedChannelsListbox');
         const channelSelect = document.getElementById('channelSelect');
@@ -259,7 +263,7 @@
       }
     };
 
-    // --- LOAD ANTREAN VIDEO (SANGAT SEDERHANA, MENAMPILKAN TEKS JADI DARI BACKEND) ---
+    // --- LOAD ANTREAN VIDEO ---
     async function loadQueue() {
       try {
         const res = await fetch('/queue-status');
@@ -276,33 +280,32 @@
 
         queue.forEach((item, index) => {
           let statusBadge = '';
-          if (item.status === 'Pending') statusBadge = `<span class="bg-yellow-100 text-yellow-800 text-xs px-2 py-1 rounded font-medium">Pending</span>`;
-          else if (item.status === 'Processing') statusBadge = `<span class="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded font-medium">Processing</span>`;
-          else if (item.status === 'Completed') statusBadge = `<span class="bg-green-100 text-green-800 text-xs px-2 py-1 rounded font-medium">Completed</span>`;
-          else statusBadge = `<span class="bg-red-100 text-red-800 text-xs px-2 py-1 rounded font-medium">Failed</span>`;
+          if (item.status === 'Pending') statusBadge = `<span class="bg-yellow-100 text-yellow-800 text-xs px-2 py-0.5 rounded font-medium whitespace-nowrap">Pending</span>`;
+          else if (item.status === 'Processing') statusBadge = `<span class="bg-blue-100 text-blue-800 text-xs px-2 py-0.5 rounded font-medium whitespace-nowrap">Processing</span>`;
+          else if (item.status === 'Completed') statusBadge = `<span class="bg-green-100 text-green-800 text-xs px-2 py-0.5 rounded font-medium whitespace-nowrap">Completed</span>`;
+          else statusBadge = `<span class="bg-red-100 text-red-800 text-xs px-2 py-0.5 rounded font-medium whitespace-nowrap">Failed</span>`;
 
           let info = '-';
           if (item.youtube_id) {
-            info = `<a href="https://youtu.be/${item.youtube_id}" target="_blank" class="text-blue-600 underline font-medium">Lihat Video</a>`;
+            info = `<a href="https://youtu.be/${item.youtube_id}" target="_blank" class="text-blue-600 underline font-medium whitespace-nowrap">Lihat Video</a>`;
           } else if (item.error_message) {
             info = `<span class="text-red-500 text-xs">${item.error_message}</span>`;
           }
 
-          let actionBtn = `<button onclick="window.deleteQueue(${item.id})" class="bg-red-500 hover:bg-red-600 text-white text-xs px-3 py-1 rounded transition cursor-pointer font-medium">Hapus</button>`;
+          let actionBtn = `<button onclick="window.deleteQueue(${item.id})" class="bg-red-500 hover:bg-red-600 text-white text-xs px-2.5 py-1 rounded transition cursor-pointer font-medium whitespace-nowrap">Hapus</button>`;
 
-          // LANGSUNG GUNAKAN TEKS WAKTU YANG SUDAH DUMP DARI BACKEND
           const displayDate = item.display_date || '-';
 
           tbody.innerHTML += `
-            <tr class="border-b">
-              <td class="p-3">${index + 1}</td>
-              <td class="p-3 font-semibold text-gray-700">${item.channel_name || '<span class="text-red-500 font-normal">Tidak Ada Channel</span>'}</td>
-              <td class="p-3 font-medium">${item.title}</td>
-              <td class="p-3">${displayDate}</td>
-              <td class="p-3 capitalize">${item.privacy_status}</td>
-              <td class="p-3">${statusBadge}</td>
-              <td class="p-3">${info}</td>
-              <td class="p-3">${actionBtn}</td>
+            <tr class="border-b hover:bg-gray-50 transition">
+              <td class="p-2.5 sm:p-3">${index + 1}</td>
+              <td class="p-2.5 sm:p-3 font-semibold text-gray-700 whitespace-nowrap">${item.channel_name || '<span class="text-red-500 font-normal">Tidak Ada Channel</span>'}</td>
+              <td class="p-2.5 sm:p-3 font-medium min-w-[150px]">${item.title}</td>
+              <td class="p-2.5 sm:p-3 whitespace-nowrap text-gray-600">${displayDate}</td>
+              <td class="p-2.5 sm:p-3 capitalize whitespace-nowrap">${item.privacy_status}</td>
+              <td class="p-2.5 sm:p-3">${statusBadge}</td>
+              <td class="p-2.5 sm:p-3">${info}</td>
+              <td class="p-2.5 sm:p-3">${actionBtn}</td>
             </tr>
           `;
         });
@@ -330,7 +333,7 @@
     // --- FORM SUBMIT ---
     document.getElementById('uploadForm').addEventListener('submit', function (e) {
       e.preventDefault();
-      
+
       const submitBtn = e.target.querySelector('button[type="submit"]');
       const originalBtnText = submitBtn.innerHTML;
       const formData = new FormData(e.target);
@@ -343,7 +346,7 @@
       xhr.upload.onprogress = function(event) {
         if (event.lengthComputable) {
           const percentComplete = Math.round((event.loaded / event.total) * 100);
-          submitBtn.innerHTML = `⏳ Mengunggah berkas ke server (${percentComplete}%)...`;
+          submitBtn.innerHTML = `⏳ Mengunggah berkas (${percentComplete}%)...`;
         }
       };
 
