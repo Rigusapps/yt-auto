@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Login & Registrasi - YT Scheduler</title>
+  <link rel="icon" type="image/png" href="https://raw.githubusercontent.com/Rigusapps/yt-auto/refs/heads/main/logo%20yt%20auto.png">
   <script src="https://cdn.tailwindcss.com"></script>
   <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
 </head>
@@ -15,10 +16,10 @@
   <!-- CARD UTAMA -->
   <div class="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden my-auto">
     
-    <!-- LOGO APLIKASI (DI ATAS TAB MASUK / DAFTAR) -->
+    <!-- LOGO APLIKASI DENGAN GAMBAR RAW GITHUB -->
     <div class="pt-8 pb-4 text-center border-b border-gray-100">
-      <div class="inline-flex items-center justify-center gap-2">
-        <i class="fa-brands fa-youtube text-red-600 text-4xl drop-shadow-sm"></i>
+      <div class="inline-flex items-center justify-center gap-3">
+        <img src="https://raw.githubusercontent.com/Rigusapps/yt-auto/refs/heads/main/logo%20yt%20auto.png" alt="YT Auto Logo" class="h-10 w-auto object-contain">
         <div class="text-left">
           <h1 class="text-xl font-extrabold text-gray-900 tracking-tight leading-none">YT Scheduler</h1>
           <span class="text-[10px] font-semibold text-gray-400 uppercase tracking-widest block mt-0.5">Auto Upload & Manage</span>
@@ -199,7 +200,6 @@
       document.getElementById('resetModal').classList.add('hidden');
     }
 
-    // User Mengajukan Reset Password
     async function handleRequestReset(e) {
       e.preventDefault();
       const username = document.getElementById('resetUsername').value.trim();
