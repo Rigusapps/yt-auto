@@ -63,21 +63,30 @@
 
     <!-- Tabel 2: Monitor Antrean Semua User (System Wide) -->
     <div class="bg-white p-5 sm:p-8 rounded-2xl shadow-sm border border-slate-200/80 space-y-4">
-      <div class="flex flex-col sm:flex-row justify-between sm:items-center gap-3 border-b border-slate-100 pb-4">
+      <div class="flex flex-col lg:flex-row justify-between lg:items-center gap-4 border-b border-slate-100 pb-4">
         <div class="flex items-center gap-2">
           <svg class="w-5 h-5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/></svg>
-          <h2 class="text-base sm:text-xl font-bold text-slate-900">Monitor Antrean Semua Video (System Wide)</h2>
+          <h2 class="text-base sm:text-xl font-bold text-slate-900">Monitor Antrean Video System</h2>
         </div>
 
-        <div class="flex items-center gap-2 flex-wrap sm:flex-nowrap">
+        <!-- Filter & Action Tools -->
+        <div class="flex flex-wrap items-center gap-2.5">
+          <!-- Filter Dropdown Username -->
+          <div class="flex items-center gap-1.5 bg-slate-100 p-1.5 rounded-xl border border-slate-200">
+            <span class="text-xs font-semibold text-slate-500 pl-1.5">Filter User:</span>
+            <select id="userFilterSelect" onchange="window.filterQueueByUser()" class="bg-white text-xs font-semibold text-slate-700 py-1 px-2.5 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer">
+              <option value="ALL">-- Semua User --</option>
+            </select>
+          </div>
+
           <!-- Tombol Hapus Terpilih -->
-          <button id="deleteSelectedBtn" onclick="window.deleteMultipleQueue()" class="hidden bg-rose-600 hover:bg-rose-700 text-white text-xs px-3.5 py-2 rounded-lg transition-all duration-200 cursor-pointer font-semibold shadow-sm active:scale-95 items-center gap-1.5">
+          <button id="deleteSelectedBtn" onclick="window.deleteMultipleQueue()" class="hidden bg-rose-600 hover:bg-rose-700 text-white text-xs px-3 py-2 rounded-xl transition-all duration-200 cursor-pointer font-semibold shadow-sm active:scale-95 items-center gap-1.5">
             <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
             <span>Hapus Terpilih (<span id="selectedCount">0</span>)</span>
           </button>
 
-          <button onclick="window.clearStuckQueue()" class="self-start sm:self-auto bg-red-50 hover:bg-red-100 text-red-600 border border-red-200/80 text-xs px-3.5 py-2 rounded-lg transition-all duration-200 cursor-pointer font-semibold active:scale-95">
-            Bersihkan Macet / Tanpa Channel
+          <button onclick="window.clearStuckQueue()" class="bg-red-50 hover:bg-red-100 text-red-600 border border-red-200/80 text-xs px-3 py-2 rounded-xl transition-all duration-200 cursor-pointer font-semibold active:scale-95">
+            Bersihkan Macet
           </button>
         </div>
       </div>
@@ -91,7 +100,15 @@
                   <input type="checkbox" id="selectAllCheckbox" onchange="window.toggleSelectAll(this)" class="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 border-slate-300 cursor-pointer">
                 </th>
                 <th class="p-3 sm:p-4">ID</th>
-                <th class="p-3 sm:p-4">User Pemilik</th>
+                
+                <!-- Header Column Username dengan Fitur Sorting -->
+                <th class="p-3 sm:p-4 select-none">
+                  <button onclick="window.toggleUsernameSort()" class="flex items-center gap-1.5 hover:text-indigo-600 transition-colors cursor-pointer font-semibold uppercase">
+                    <span>User Pemilik</span>
+                    <span id="sortIcon" class="text-slate-400 font-bold">↕</span>
+                  </button>
+                </th>
+
                 <th class="p-3 sm:p-4">Channel</th>
                 <th class="p-3 sm:p-4">Judul</th>
                 <th class="p-3 sm:p-4">Jadwal Tayang (WIB)</th>
@@ -129,6 +146,11 @@
   </footer>
 
   <script>
+    // GLOBAL STATE UNTUK ANTREAN & SORTING
+    let rawQueueData = [];
+    let currentSortOrder = 'NONE'; // 'NONE', 'ASC', 'DESC'
+    let selectedUserFilter = 'ALL';
+
     // 1. KELOLA DATA USER & APPROVAL
     async function loadUsers() {
       try {
@@ -279,64 +301,129 @@
       }
     };
 
-    // 3. MONITOR ANTREAN SISTEM
+    // 3. LOGIC FILTER & SORTING USERNAME
+    window.updateUserFilterOptions = function() {
+      const filterSelect = document.getElementById('userFilterSelect');
+      const currentSelected = filterSelect.value;
+
+      // Kumpulkan username unik
+      const usernames = Array.from(new Set(rawQueueData.map(item => item.username || 'System'))).sort();
+
+      filterSelect.innerHTML = `<option value="ALL">-- Semua User (${rawQueueData.length}) --</option>`;
+      usernames.forEach(uname => {
+        const count = rawQueueData.filter(i => (i.username || 'System') === uname).length;
+        filterSelect.innerHTML += `<option value="${uname}">${uname} (${count})</option>`;
+      });
+
+      filterSelect.value = usernames.includes(currentSelected) || currentSelected === 'ALL' ? currentSelected : 'ALL';
+      selectedUserFilter = filterSelect.value;
+    };
+
+    window.filterQueueByUser = function() {
+      const filterSelect = document.getElementById('userFilterSelect');
+      selectedUserFilter = filterSelect.value;
+      renderQueueTable();
+    };
+
+    window.toggleUsernameSort = function() {
+      const icon = document.getElementById('sortIcon');
+      if (currentSortOrder === 'NONE') {
+        currentSortOrder = 'ASC';
+        icon.textContent = '▲ A-Z';
+        icon.className = 'text-indigo-600 font-bold';
+      } else if (currentSortOrder === 'ASC') {
+        currentSortOrder = 'DESC';
+        icon.textContent = '▼ Z-A';
+        icon.className = 'text-indigo-600 font-bold';
+      } else {
+        currentSortOrder = 'NONE';
+        icon.textContent = '↕';
+        icon.className = 'text-slate-400 font-bold';
+      }
+      renderQueueTable();
+    };
+
+    // 4. MONITOR & RENDER ANTREAN SISTEM
     async function loadAdminQueue() {
       try {
         const res = await fetch('/queue-status');
         if (!res.ok) return;
 
-        const queue = await res.json();
-        const tbody = document.getElementById('queueTableBody');
-        tbody.innerHTML = '';
-
-        // Reset status checkbox header & tombol
-        const selectAll = document.getElementById('selectAllCheckbox');
-        if (selectAll) selectAll.checked = false;
-        window.updateSelectedCount();
-
-        if (!queue || !Array.isArray(queue) || queue.length === 0) {
-          tbody.innerHTML = `<tr><td colspan="10" class="p-6 text-center text-slate-400 font-normal">Tidak ada antrean video di dalam sistem</td></tr>`;
-          return;
-        }
-
-        queue.forEach((item, index) => {
-          let statusBadge = '';
-          if (item.status === 'Pending') statusBadge = `<span class="bg-amber-50 text-amber-700 border border-amber-200/60 text-xs px-2.5 py-1 rounded-md font-semibold whitespace-nowrap">Pending</span>`;
-          else if (item.status === 'Processing') statusBadge = `<span class="bg-indigo-50 text-indigo-700 border border-indigo-200/60 text-xs px-2.5 py-1 rounded-md font-semibold whitespace-nowrap">Processing</span>`;
-          else if (item.status === 'Completed') statusBadge = `<span class="bg-emerald-50 text-emerald-700 border border-emerald-200/60 text-xs px-2.5 py-1 rounded-md font-semibold whitespace-nowrap">Completed</span>`;
-          else statusBadge = `<span class="bg-rose-50 text-rose-700 border border-rose-200/60 text-xs px-2.5 py-1 rounded-md font-semibold whitespace-nowrap">Failed</span>`;
-
-          let info = '-';
-          if (item.youtube_id) {
-            info = `<a href="https://youtu.be/${item.youtube_id}" target="_blank" class="text-indigo-600 hover:text-indigo-800 underline font-semibold whitespace-nowrap">Lihat Video</a>`;
-          } else if (item.error_message) {
-            info = `<span class="text-rose-600 text-xs font-normal">${item.error_message}</span>`;
-          }
-
-          const displayDate = item.display_date || '-';
-
-          tbody.innerHTML += `
-            <tr class="hover:bg-slate-50/80 transition-colors">
-              <td class="p-3.5 sm:p-4 text-center">
-                <input type="checkbox" value="${item.id}" onchange="window.updateSelectedCount()" class="queue-item-checkbox w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 border-slate-300 cursor-pointer">
-              </td>
-              <td class="p-3.5 sm:p-4 text-slate-400 font-mono text-xs">${index + 1}</td>
-              <td class="p-3.5 sm:p-4 font-bold text-indigo-600 whitespace-nowrap">${item.username || 'System'}</td>
-              <td class="p-3.5 sm:p-4 font-bold text-slate-800 whitespace-nowrap">${item.channel_name || '<span class="text-rose-500 font-normal">Tanpa Channel</span>'}</td>
-              <td class="p-3.5 sm:p-4 font-medium min-w-[140px] text-slate-900">${item.title}</td>
-              <td class="p-3.5 sm:p-4 whitespace-nowrap text-slate-600">${displayDate}</td>
-              <td class="p-3.5 sm:p-4 capitalize whitespace-nowrap"><span class="bg-slate-100 text-slate-600 px-2 py-0.5 rounded text-xs font-medium">${item.privacy_status}</span></td>
-              <td class="p-3.5 sm:p-4">${statusBadge}</td>
-              <td class="p-3.5 sm:p-4">${info}</td>
-              <td class="p-3.5 sm:p-4 whitespace-nowrap">
-                <button onclick="window.deleteQueue(${item.id})" class="bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200/80 text-xs px-3 py-1.5 rounded-lg transition-all cursor-pointer font-semibold whitespace-nowrap active:scale-95">Hapus</button>
-              </td>
-            </tr>
-          `;
-        });
+        rawQueueData = await res.json();
+        updateUserFilterOptions();
+        renderQueueTable();
       } catch (err) {
         console.error("Gagal memuat antrean admin:", err);
       }
+    }
+
+    function renderQueueTable() {
+      const tbody = document.getElementById('queueTableBody');
+      tbody.innerHTML = '';
+
+      // Reset checkbox header & tombol
+      const selectAll = document.getElementById('selectAllCheckbox');
+      if (selectAll) selectAll.checked = false;
+      window.updateSelectedCount();
+
+      if (!rawQueueData || !Array.isArray(rawQueueData) || rawQueueData.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="10" class="p-6 text-center text-slate-400 font-normal">Tidak ada antrean video di dalam sistem</td></tr>`;
+        return;
+      }
+
+      // 1. Filter data berdasarkan dropdown user
+      let processedData = rawQueueData.filter(item => {
+        if (selectedUserFilter === 'ALL') return true;
+        return (item.username || 'System') === selectedUserFilter;
+      });
+
+      // 2. Sorting data berdasarkan Username
+      if (currentSortOrder === 'ASC') {
+        processedData.sort((a, b) => (a.username || 'System').localeCompare(b.username || 'System'));
+      } else if (currentSortOrder === 'DESC') {
+        processedData.sort((a, b) => (b.username || 'System').localeCompare(a.username || 'System'));
+      }
+
+      if (processedData.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="10" class="p-6 text-center text-slate-400 font-normal">Tidak ada antrean video untuk user terpilih</td></tr>`;
+        return;
+      }
+
+      processedData.forEach((item, index) => {
+        let statusBadge = '';
+        if (item.status === 'Pending') statusBadge = `<span class="bg-amber-50 text-amber-700 border border-amber-200/60 text-xs px-2.5 py-1 rounded-md font-semibold whitespace-nowrap">Pending</span>`;
+        else if (item.status === 'Processing') statusBadge = `<span class="bg-indigo-50 text-indigo-700 border border-indigo-200/60 text-xs px-2.5 py-1 rounded-md font-semibold whitespace-nowrap">Processing</span>`;
+        else if (item.status === 'Completed') statusBadge = `<span class="bg-emerald-50 text-emerald-700 border border-emerald-200/60 text-xs px-2.5 py-1 rounded-md font-semibold whitespace-nowrap">Completed</span>`;
+        else statusBadge = `<span class="bg-rose-50 text-rose-700 border border-rose-200/60 text-xs px-2.5 py-1 rounded-md font-semibold whitespace-nowrap">Failed</span>`;
+
+        let info = '-';
+        if (item.youtube_id) {
+          info = `<a href="https://youtu.be/${item.youtube_id}" target="_blank" class="text-indigo-600 hover:text-indigo-800 underline font-semibold whitespace-nowrap">Lihat Video</a>`;
+        } else if (item.error_message) {
+          info = `<span class="text-rose-600 text-xs font-normal">${item.error_message}</span>`;
+        }
+
+        const displayDate = item.display_date || '-';
+
+        tbody.innerHTML += `
+          <tr class="hover:bg-slate-50/80 transition-colors">
+            <td class="p-3.5 sm:p-4 text-center">
+              <input type="checkbox" value="${item.id}" onchange="window.updateSelectedCount()" class="queue-item-checkbox w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 border-slate-300 cursor-pointer">
+            </td>
+            <td class="p-3.5 sm:p-4 text-slate-400 font-mono text-xs">${index + 1}</td>
+            <td class="p-3.5 sm:p-4 font-bold text-indigo-600 whitespace-nowrap">${item.username || 'System'}</td>
+            <td class="p-3.5 sm:p-4 font-bold text-slate-800 whitespace-nowrap">${item.channel_name || '<span class="text-rose-500 font-normal">Tanpa Channel</span>'}</td>
+            <td class="p-3.5 sm:p-4 font-medium min-w-[140px] text-slate-900">${item.title}</td>
+            <td class="p-3.5 sm:p-4 whitespace-nowrap text-slate-600">${displayDate}</td>
+            <td class="p-3.5 sm:p-4 capitalize whitespace-nowrap"><span class="bg-slate-100 text-slate-600 px-2 py-0.5 rounded text-xs font-medium">${item.privacy_status}</span></td>
+            <td class="p-3.5 sm:p-4">${statusBadge}</td>
+            <td class="p-3.5 sm:p-4">${info}</td>
+            <td class="p-3.5 sm:p-4 whitespace-nowrap">
+              <button onclick="window.deleteQueue(${item.id})" class="bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200/80 text-xs px-3 py-1.5 rounded-lg transition-all cursor-pointer font-semibold whitespace-nowrap active:scale-95">Hapus</button>
+            </td>
+          </tr>
+        `;
+      });
     }
 
     window.deleteQueue = async function(id) {
