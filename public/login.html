@@ -1,225 +1,172 @@
 <!DOCTYPE html>
-<html lang="id" class="fixed inset-0 overflow-hidden select-none">
+<html lang="id">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>Login / Register / Reset Password - YouTube Scheduler</title>
-  <link rel="icon" type="image/png" href="https://raw.githubusercontent.com/Rigusapps/yt-auto/refs/heads/main/logo%20yt%20auto.png">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Login & Registrasi - YT Scheduler</title>
   <script src="https://cdn.tailwindcss.com"></script>
-  <style>
-    html, body {
-      position: fixed;
-      width: 100%;
-      height: 100%;
-      overflow: hidden;
-      touch-action: none;
-      overscroll-behavior: none;
-    }
-  </style>
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
 </head>
-<body class="bg-gray-100 fixed inset-0 flex flex-col justify-between antialiased">
+<body class="bg-gray-100 min-h-screen flex items-center justify-center p-4">
 
-  <div class="flex-1 flex items-center justify-center px-4 w-full">
-    <div class="bg-white p-5 sm:p-7 rounded-xl shadow-md w-full max-w-sm border border-gray-100">
-      <h2 id="formTitle" class="text-xl sm:text-2xl font-bold mb-4 text-center text-gray-800 leading-tight">Login User</h2>
+  <div class="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden">
+    <!-- TAB SWITCHER -->
+    <div class="flex border-b">
+      <button id="tabLoginBtn" onclick="switchTab('login')" class="w-1/2 py-4 text-center font-bold text-blue-600 border-b-2 border-blue-600 transition">
+        <i class="fa-solid fa-right-to-bracket mr-1"></i> Masuk
+      </button>
+      <button id="tabRegisterBtn" onclick="switchTab('register')" class="w-1/2 py-4 text-center font-bold text-gray-500 hover:text-gray-700 transition">
+        <i class="fa-solid fa-user-plus mr-1"></i> Daftar
+      </button>
+    </div>
 
-      <form id="authForm" class="space-y-3">
+    <div class="p-6">
+      <!-- FORM LOGIN -->
+      <form id="loginForm" onsubmit="handleLogin(event)" class="space-y-4">
         <div>
-          <label class="block text-xs font-medium mb-1 text-gray-700">Username</label>
-          <input type="text" id="username" required class="w-full border text-xs sm:text-sm p-2 sm:p-2.5 rounded-lg border-gray-300 focus:ring-2 focus:ring-blue-500 outline-none" placeholder="Masukkan username">
+          <label class="block text-xs font-semibold text-gray-700 mb-1">Username</label>
+          <input type="text" id="loginUsername" required class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm" placeholder="Masukkan username">
         </div>
-
-        <div id="extraFields" class="hidden space-y-3">
-          <div>
-            <label class="block text-xs font-medium mb-1 text-gray-700">Email</label>
-            <input type="email" id="email" class="w-full border text-xs sm:text-sm p-2 sm:p-2.5 rounded-lg border-gray-300 focus:ring-2 focus:ring-blue-500 outline-none" placeholder="contoh@gmail.com">
-          </div>
-          <div>
-            <label class="block text-xs font-medium mb-1 text-gray-700">No. WhatsApp</label>
-            <input type="text" id="whatsapp" class="w-full border text-xs sm:text-sm p-2 sm:p-2.5 rounded-lg border-gray-300 focus:ring-2 focus:ring-blue-500 outline-none" placeholder="08123456789">
-          </div>
+        <div>
+          <label class="block text-xs font-semibold text-gray-700 mb-1">Password</label>
+          <input type="password" id="loginPassword" required class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm" placeholder="Masukkan password">
         </div>
-
-        <div id="passwordContainer">
-          <label id="passwordLabel" class="block text-xs font-medium mb-1 text-gray-700">Password</label>
-          <div class="relative">
-            <input type="password" id="password" required class="w-full border text-xs sm:text-sm p-2 sm:p-2.5 pr-10 rounded-lg border-gray-300 focus:ring-2 focus:ring-blue-500 outline-none" placeholder="Masukkan password">
-
-            <button type="button" onclick="togglePasswordVisibility()" class="absolute inset-y-0 right-0 px-3 flex items-center text-gray-500 hover:text-gray-700 cursor-pointer focus:outline-none" aria-label="Toggle password visibility">
-              <svg id="eyeOpen" class="w-4 h-4 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-              </svg>
-              <svg id="eyeClosed" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858-5.908a10.018 10.018 0 013.837-.838c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m-3.148-3.148A3 3 0 0012 9a2.99 2.99 0 00-1.848.641M15 12a3 3 0 01-3 3" />
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3l18 18" />
-              </svg>
-            </button>
-          </div>
-        </div>
-
-        <button type="submit" id="submitBtn" class="w-full bg-blue-600 text-white py-2.5 rounded-lg font-semibold text-xs sm:text-sm hover:bg-blue-700 transition cursor-pointer shadow-sm mt-1">
-          Login
+        <button type="submit" class="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg transition text-sm">
+          Masuk Sekarang
         </button>
       </form>
 
-      <div class="mt-3 text-center text-xs text-gray-600 space-y-1">
+      <!-- FORM REGISTRASI -->
+      <form id="registerForm" onsubmit="handleRegister(event)" class="space-y-4 hidden">
         <div>
-          <span id="toggleText">Belum punya akun?</span>
-          <button id="toggleBtn" onclick="toggleMode('register')" class="text-blue-600 font-semibold underline ml-1 cursor-pointer">Daftar Sekarang</button>
+          <label class="block text-xs font-semibold text-gray-700 mb-1">Username</label>
+          <input type="text" id="regUsername" required class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm" placeholder="Username baru">
         </div>
         <div>
-          <button id="forgotBtn" onclick="toggleMode('forgot')" class="text-slate-500 hover:text-blue-600 text-[11px] underline cursor-pointer">Lupa Password?</button>
+          <label class="block text-xs font-semibold text-gray-700 mb-1">Email</label>
+          <input type="email" id="regEmail" required class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm" placeholder="nama@email.com">
         </div>
-      </div>
+        <div>
+          <label class="block text-xs font-semibold text-gray-700 mb-1">Nomor WhatsApp</label>
+          <input type="text" id="regWhatsapp" required class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm" placeholder="081234567890">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-gray-700 mb-1">Password</label>
+          <input type="password" id="regPassword" required class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm" placeholder="Kata sandi">
+        </div>
+        <button type="submit" class="w-full py-2.5 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-lg transition text-sm">
+          Daftar Akun
+        </button>
+      </form>
     </div>
   </div>
 
-  <footer class="bg-white border-t border-gray-200 py-3 px-4 w-full shrink-0 z-20 pb-4 sm:pb-3">
-    <div class="max-w-5xl mx-auto flex flex-col md:flex-row justify-between items-center gap-1.5 text-[10px] sm:text-xs text-gray-500 text-center md:text-left">
-      <div>
-        <p class="font-semibold text-gray-700">YouTube Auto Uploader & Scheduler v2.0</p>
-        <p>&copy; 2026 Integrated Local Automation Engine. All rights reserved.</p>
-      </div>
-      <div class="flex flex-wrap justify-center items-center gap-2.5 sm:gap-4">
-        <span class="inline-flex items-center gap-1 text-green-600 bg-green-50 px-2 py-0.5 rounded-full font-medium">
-          <span class="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse"></span> Server Running
-        </span>
-        <a href="https://studio.youtube.com" target="_blank" class="hover:text-blue-600 transition">YouTube Studio</a>
-        <a href="https://www.buanamedia.my.id/" target="_blank" class="hover:text-blue-600 transition font-medium">By Buana Media</a>
-      </div>
-    </div>
-  </footer>
-
   <script>
-    let mode = 'login'; // 'login', 'register', atau 'forgot'
+    // SESUAIKAN NOMOR WHATSAPP ADMIN DI SINI (Gunakan format 628...)
+    const ADMIN_WA_NUMBER = "6281234567890";
 
-    function togglePasswordVisibility() {
-      const passwordInput = document.getElementById('password');
-      const eyeOpen = document.getElementById('eyeOpen');
-      const eyeClosed = document.getElementById('eyeClosed');
+    // Pindah Tampilan Tab Login / Register
+    function switchTab(tab) {
+      const loginForm = document.getElementById('loginForm');
+      const registerForm = document.getElementById('registerForm');
+      const tabLoginBtn = document.getElementById('tabLoginBtn');
+      const tabRegisterBtn = document.getElementById('tabRegisterBtn');
 
-      if (passwordInput.type === 'password') {
-        passwordInput.type = 'text';
-        eyeOpen.classList.remove('hidden');
-        eyeClosed.classList.add('hidden');
+      if (tab === 'login') {
+        loginForm.classList.remove('hidden');
+        registerForm.classList.add('hidden');
+        tabLoginBtn.className = "w-1/2 py-4 text-center font-bold text-blue-600 border-b-2 border-blue-600 transition";
+        tabRegisterBtn.className = "w-1/2 py-4 text-center font-bold text-gray-500 hover:text-gray-700 transition";
       } else {
-        passwordInput.type = 'password';
-        eyeOpen.classList.add('hidden');
-        eyeClosed.classList.remove('hidden');
+        loginForm.classList.add('hidden');
+        registerForm.classList.remove('hidden');
+        tabRegisterBtn.className = "w-1/2 py-4 text-center font-bold text-green-600 border-b-2 border-green-600 transition";
+        tabLoginBtn.className = "w-1/2 py-4 text-center font-bold text-gray-500 hover:text-gray-700 transition";
       }
     }
 
-    function toggleMode(targetMode) {
-      if (targetMode) {
-        mode = targetMode;
-      } else {
-        mode = mode === 'login' ? 'register' : 'login';
-      }
-
-      const formTitle = document.getElementById('formTitle');
-      const submitBtn = document.getElementById('submitBtn');
-      const toggleText = document.getElementById('toggleText');
-      const toggleBtn = document.getElementById('toggleBtn');
-      const forgotBtn = document.getElementById('forgotBtn');
-      const extraFields = document.getElementById('extraFields');
-      const passwordContainer = document.getElementById('passwordContainer');
-      const passwordInput = document.getElementById('password');
-      const passwordLabel = document.getElementById('passwordLabel');
-      const emailInput = document.getElementById('email');
-      const waInput = document.getElementById('whatsapp');
-
-      if (mode === 'login') {
-        formTitle.innerText = 'Login User';
-        submitBtn.innerText = 'Login';
-        toggleText.innerText = 'Belum punya akun?';
-        toggleBtn.innerText = 'Daftar Sekarang';
-        toggleBtn.setAttribute('onclick', "toggleMode('register')");
-        forgotBtn.classList.remove('hidden');
-        extraFields.classList.add('hidden');
-        passwordContainer.classList.remove('hidden');
-        passwordInput.setAttribute('required', 'true');
-        passwordLabel.innerText = 'Password';
-        passwordInput.placeholder = 'Masukkan password';
-        emailInput.removeAttribute('required');
-        waInput.removeAttribute('required');
-      } else if (mode === 'register') {
-        formTitle.innerText = 'Pendaftaran Akun Baru';
-        submitBtn.innerText = 'Daftar';
-        toggleText.innerText = 'Sudah punya akun?';
-        toggleBtn.innerText = 'Login';
-        toggleBtn.setAttribute('onclick', "toggleMode('login')");
-        forgotBtn.classList.add('hidden');
-        extraFields.classList.remove('hidden');
-        passwordContainer.classList.remove('hidden');
-        passwordInput.setAttribute('required', 'true');
-        passwordLabel.innerText = 'Password';
-        passwordInput.placeholder = 'Masukkan password';
-        emailInput.setAttribute('required', 'true');
-        waInput.setAttribute('required', 'true');
-      } else if (mode === 'forgot') {
-        formTitle.innerText = 'Reset Password User';
-        submitBtn.innerText = 'Atur Ulang Password';
-        toggleText.innerText = 'Kembali ke';
-        toggleBtn.innerText = 'Login';
-        toggleBtn.setAttribute('onclick', "toggleMode('login')");
-        forgotBtn.classList.add('hidden');
-        extraFields.classList.add('hidden');
-        passwordContainer.classList.remove('hidden');
-        passwordInput.setAttribute('required', 'true');
-        passwordLabel.innerText = 'Password Baru';
-        passwordInput.placeholder = 'Masukkan password baru';
-        emailInput.removeAttribute('required');
-        waInput.removeAttribute('required');
-      }
-    }
-
-    document.getElementById('authForm').addEventListener('submit', async (e) => {
+    // Process Login
+    async function handleLogin(e) {
       e.preventDefault();
-      const username = document.getElementById('username').value;
-      const password = document.getElementById('password').value;
-      const email = document.getElementById('email').value;
-      const whatsapp = document.getElementById('whatsapp').value;
-
-      let endpoint = '/api/login';
-      let bodyPayload = {};
-
-      if (mode === 'login') {
-        endpoint = '/api/login';
-        bodyPayload = { username, password };
-      } else if (mode === 'register') {
-        endpoint = '/api/register';
-        bodyPayload = { username, password, email, whatsapp };
-      } else if (mode === 'forgot') {
-        endpoint = '/api/reset-password';
-        bodyPayload = { username, newPassword: password };
-      }
+      const username = document.getElementById('loginUsername').value.trim();
+      const password = document.getElementById('loginPassword').value;
 
       try {
-        const res = await fetch(endpoint, {
+        const res = await fetch('/api/login', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(bodyPayload)
+          body: JSON.stringify({ username, password })
         });
 
         const data = await res.json();
-        if (res.ok) {
-          if (mode === 'login') {
-            window.location.href = '/';
-          } else if (mode === 'register') {
-            alert(data.message || 'Pendaftaran berhasil!');
-            toggleMode('login');
-          } else if (mode === 'forgot') {
-            alert(data.message || 'Password berhasil diubah. Silakan login.');
-            toggleMode('login');
-          }
-        } else {
-          alert(data.error || 'Terjadi kesalahan!');
-        }
+        if (!res.ok) throw new Error(data.error || 'Login gagal');
+
+        window.location.href = data.user.role === 'admin' ? '/admin.html' : '/';
       } catch (err) {
-        alert('Gagal terhubung ke server: ' + err.message);
+        alert(err.message);
       }
-    });
+    }
+
+    // Process Register
+    async function handleRegister(e) {
+      e.preventDefault();
+      const username = document.getElementById('regUsername').value.trim();
+      const email = document.getElementById('regEmail').value.trim();
+      const whatsapp = document.getElementById('regWhatsapp').value.trim();
+      const password = document.getElementById('regPassword').value;
+
+      try {
+        const res = await fetch('/api/register', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username, email, whatsapp, password })
+        });
+
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Gagal mendaftar');
+
+        // Susun teks pesan otomatis ke WA Admin
+        const textMessage = encodeURIComponent(
+          `Halo Admin, saya telah mendaftar akun baru di YT Scheduler.\n\n` +
+          `*Detail Akun:*\n` +
+          `- Username: ${username}\n` +
+          `- Email: ${email}\n` +
+          `- WhatsApp: ${whatsapp}\n\n` +
+          `Mohon persetujuan/aktivasi akun saya. Terima kasih!`
+        );
+
+        const waUrl = `https://wa.me/${ADMIN_WA_NUMBER}?text=${textMessage}`;
+        showWaConfirmationModal(data.message, waUrl);
+
+      } catch (err) {
+        alert(err.message);
+      }
+    }
+
+    // Pop-up Tombol Konfirmasi WA
+    function showWaConfirmationModal(serverMsg, waUrl) {
+      const container = document.createElement('div');
+      container.className = 'fixed inset-0 bg-black/50 backdrop-blur-sm flex justify-center items-center p-4 z-50';
+      container.innerHTML = `
+        <div class="bg-white rounded-xl p-6 max-w-sm w-full text-center shadow-xl">
+          <div class="w-12 h-12 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-4 text-2xl">
+            <i class="fa-brands fa-whatsapp"></i>
+          </div>
+          <h3 class="text-lg font-bold text-gray-800 mb-2">Pendaftaran Berhasil!</h3>
+          <p class="text-xs text-gray-600 mb-6">${serverMsg}</p>
+          
+          <div class="space-y-2">
+            <a href="${waUrl}" target="_blank" class="w-full block py-2.5 px-4 bg-green-600 hover:bg-green-700 text-white font-semibold text-xs rounded-lg transition">
+              <i class="fa-brands fa-whatsapp mr-1"></i> Konfirmasi ke WA Admin
+            </a>
+            <button onclick="this.closest('.fixed').remove(); switchTab('login');" class="w-full py-2 px-4 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold text-xs rounded-lg transition">
+              Tutup & Ke Login
+            </button>
+          </div>
+        </div>
+      `;
+      document.body.appendChild(container);
+    }
   </script>
 </body>
 </html>
