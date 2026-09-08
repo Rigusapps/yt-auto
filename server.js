@@ -15,7 +15,7 @@ require('dotenv').config();
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Config Cloudinary (Otomatis membaca CLOUDINARY_URL dari .env)
+// Config Cloudinary
 cloudinary.config();
 
 // --- PROXY SETTING UNTUK CLOUD DEPLOYMENT ---
@@ -38,7 +38,7 @@ app.use(session({
   }
 }));
 
-// Folder uploads lokal sementara sebelum terkirim ke Cloudinary
+// Folder uploads lokal sementara
 const UPLOAD_DIR = path.join(__dirname, 'uploads');
 if (!fs.existsSync(UPLOAD_DIR)) {
   fs.mkdirSync(UPLOAD_DIR, { recursive: true });
@@ -83,7 +83,6 @@ function requireAdmin(req, res, next) {
   next();
 }
 
-// Helper untuk hapus file lokal aman
 function safeUnlink(filePath) {
   if (filePath && fs.existsSync(filePath)) {
     try {
@@ -94,7 +93,6 @@ function safeUnlink(filePath) {
   }
 }
 
-// --- FUNGSI FORMAT TANGGAL WIB TERPUSAT ---
 function formatToWIBString(rawVal) {
   if (!rawVal) return '-';
   let ms;
@@ -122,13 +120,11 @@ function formatToWIBString(rawVal) {
   return `${p.day}/${p.month}/${p.year}, ${p.hour}.${p.minute}.${p.second}`;
 }
 
-// --- FUNGSI MEMBERSIHKAN BERKAS DARI CLOUDINARY / DISK (PRESISI) ---
 async function removeCloudinaryFile(filePath) {
   if (!filePath || typeof filePath !== 'string') return;
 
   if (filePath.includes('cloudinary.com')) {
     try {
-      // Ekstraksi Public ID secara presisi dari URL Cloudinary
       const regex = /\/v\d+\/(.+)\.[a-z0-9]+$/i;
       const match = filePath.match(regex);
       const publicId = match ? match[1] : null;
@@ -147,8 +143,8 @@ async function removeCloudinaryFile(filePath) {
 
 // --- AUTH ROUTES ---
 
-// Public Reset Password (oleh user sendiri via form reset)
-app.post('/api/reset-password', async (req, res) => {
+// USER MENGAJUKAN RESET PASSWORD (PENDING ACC ADMIN)
+app.post('/api/request-reset-password', async (req, res) => {
   try {
     const { username, newPassword } = req.body;
     if (!username || !newPassword) {
@@ -157,8 +153,15 @@ app.post('/api/reset-password', async (req, res) => {
 
     const hashedPassword = await bcrypt.hash(newPassword, 10);
 
+    // Cek ketersediaan kolom pending_password
+    try {
+      await turso.execute("ALTER TABLE users ADD COLUMN pending_password TEXT");
+    } catch (e) {
+      // Abaikan jika kolom sudah ada
+    }
+
     const result = await turso.execute({
-      sql: 'UPDATE users SET password = ? WHERE username = ?',
+      sql: 'UPDATE users SET pending_password = ? WHERE username = ?',
       args: [hashedPassword, username]
     });
 
@@ -166,7 +169,7 @@ app.post('/api/reset-password', async (req, res) => {
       return res.status(404).json({ error: 'Username tidak ditemukan.' });
     }
 
-    res.json({ success: true, message: 'Password berhasil diubah!' });
+    res.json({ success: true, message: 'Pengajuan reset password berhasil dikirim. Menunggu persetujuan Admin.' });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -294,7 +297,7 @@ app.delete('/channels/:id', requireAuth, async (req, res) => {
   }
 });
 
-// --- QUEUE MANAGEMENT ROUTES (CLOUDINARY STORAGE) ---
+// --- QUEUE MANAGEMENT ROUTES ---
 
 const scheduleHandler = async (req, res) => {
   try {
@@ -308,7 +311,6 @@ const scheduleHandler = async (req, res) => {
       return res.status(400).json({ error: 'Pilih channel tujuan unggah!' });
     }
 
-    // 1. UPLOAD FILE KE CLOUDINARY
     let cloudResult;
     try {
       cloudResult = await cloudinary.uploader.upload(req.file.path, {
@@ -320,12 +322,10 @@ const scheduleHandler = async (req, res) => {
       return res.status(500).json({ error: `Gagal upload ke Cloudinary: ${cloudErr.message}` });
     }
 
-    // Hapus file temporary di lokal server setelah berhasil upload ke Cloudinary
     safeUnlink(req.file.path);
 
     const videoPublicUrl = cloudResult.secure_url;
 
-    // 2. PARSING TIMESTAMP WIB PRESISI (+07:00)
     let timestamp;
     if (!isNaN(Number(scheduled_at))) {
       timestamp = Number(scheduled_at);
@@ -341,7 +341,6 @@ const scheduleHandler = async (req, res) => {
 
     const userId = req.session.user.id;
 
-    // 3. SIMPAN PUBLIC URL CLOUDINARY KE TURSO DATABASE
     await turso.execute({
       sql: `INSERT INTO queue (title, description, tags, privacy_status, scheduled_at, file_path, channel_id, user_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       args: [title, description || '', tags || '', privacy_status || 'private', timestamp, videoPublicUrl, channel_id, userId]
@@ -465,7 +464,10 @@ app.delete('/clear-stuck-queue', requireAuth, async (req, res) => {
 
 app.get('/api/admin/users', requireAdmin, async (req, res) => {
   try {
-    const usersRes = await turso.execute('SELECT id, username, email, whatsapp, role, is_approved, created_at FROM users');
+    // Memastikan kolom pending_password terdeteksi
+    try { await turso.execute("ALTER TABLE users ADD COLUMN pending_password TEXT"); } catch(e){}
+
+    const usersRes = await turso.execute('SELECT id, username, email, whatsapp, role, is_approved, pending_password, created_at FROM users');
     res.json(usersRes.rows);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -485,7 +487,34 @@ app.post('/api/admin/approve/:id', requireAdmin, async (req, res) => {
   }
 });
 
-// Endpoint Edit Email & WhatsApp User (Admin)
+// ADMIN ACC RESET PASSWORD USER
+app.post('/api/admin/approve-reset-password/:id', requireAdmin, async (req, res) => {
+  try {
+    const targetUserId = req.params.id;
+
+    const userRes = await turso.execute({
+      sql: 'SELECT pending_password FROM users WHERE id = ?',
+      args: [targetUserId]
+    });
+
+    const user = userRes.rows[0];
+    if (!user || !user.pending_password) {
+      return res.status(400).json({ error: 'Tidak ada permintaan reset password untuk pengguna ini.' });
+    }
+
+    // Pindahkan pending_password ke password utama, lalu hapus pending_password
+    await turso.execute({
+      sql: 'UPDATE users SET password = pending_password, pending_password = NULL WHERE id = ?',
+      args: [targetUserId]
+    });
+
+    res.json({ success: true, message: 'Password baru berhasil disetujui (ACC)!' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// UPDATE EMAIL & WHATSAPP (ADMIN)
 app.put('/api/admin/users/:id', requireAdmin, async (req, res) => {
   try {
     const { email, whatsapp } = req.body;
@@ -501,33 +530,6 @@ app.put('/api/admin/users/:id', requireAdmin, async (req, res) => {
     });
 
     res.json({ success: true, message: 'Data pengguna berhasil diperbarui!' });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// Endpoint Reset Password khusus Admin (Berdasarkan ID User)
-app.post('/api/admin/reset-password/:id', requireAdmin, async (req, res) => {
-  try {
-    const { newPassword } = req.body;
-    const targetUserId = req.params.id;
-
-    if (!newPassword || newPassword.trim() === '') {
-      return res.status(400).json({ error: 'Password baru tidak boleh kosong!' });
-    }
-
-    const hashedPassword = await bcrypt.hash(newPassword, 10);
-
-    const result = await turso.execute({
-      sql: 'UPDATE users SET password = ? WHERE id = ?',
-      args: [hashedPassword, targetUserId]
-    });
-
-    if (result.rowsAffected === 0) {
-      return res.status(404).json({ error: 'Pengguna tidak ditemukan.' });
-    }
-
-    res.json({ success: true, message: 'Password pengguna berhasil diperbarui!' });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
