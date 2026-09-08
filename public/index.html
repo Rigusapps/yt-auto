@@ -76,10 +76,10 @@
         <div class="space-y-1.5">
           <label class="block text-xs sm:text-sm font-semibold text-slate-700">Pilih Video</label>
           <div class="relative border border-slate-200 rounded-xl p-2.5 sm:p-3 text-center hover:border-indigo-400 transition-colors bg-slate-50/50 flex items-center justify-center">
-            <input type="file" name="video" accept="video/*" required class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10">
+            <input type="file" id="videoInput" name="video" accept="video/*" required class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10">
             <div class="flex items-center justify-center gap-2 pointer-events-none">
               <svg class="w-5 h-5 text-indigo-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/></svg>
-              <span class="text-xs sm:text-sm text-slate-600 font-medium truncate">Pilih / Drag file video di sini</span>
+              <span id="fileNameDisplay" class="text-xs sm:text-sm text-slate-600 font-medium truncate">Pilih / Drag file video di sini</span>
             </div>
           </div>
         </div>
@@ -130,7 +130,7 @@
         </div>
         
         <div class="flex items-center gap-2 flex-wrap sm:flex-nowrap">
-          <!-- Tombol Hapus Terpilih (Otomatis muncul jika ada item dicentang) -->
+          <!-- Tombol Hapus Terpilih -->
           <button id="deleteSelectedBtn" onclick="window.deleteMultipleQueue()" class="hidden bg-rose-600 hover:bg-rose-700 text-white text-xs px-3.5 py-2 rounded-lg transition-all duration-200 cursor-pointer font-semibold shadow-sm active:scale-95 items-center gap-1.5">
             <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
             <span>Hapus Terpilih (<span id="selectedCount">0</span>)</span>
@@ -188,6 +188,23 @@
   </footer>
 
   <script>
+    // Utility XSS Prevention
+    function escapeHtml(text) {
+      if (!text) return '';
+      return String(text)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+    }
+
+    // Displays selected video filename
+    document.getElementById('videoInput').addEventListener('change', function(e) {
+      const fileName = e.target.files[0] ? e.target.files[0].name : 'Pilih / Drag file video di sini';
+      document.getElementById('fileNameDisplay').textContent = fileName;
+    });
+
     async function checkUserSession() {
       try {
         const res = await fetch('/api/me');
@@ -203,8 +220,8 @@
         }
 
         document.getElementById('userInfo').innerHTML = `
-          <span>👤 User: <strong class="text-indigo-300 font-semibold">${data.user.username}</strong></span>
-          <span class="bg-slate-800 px-2 py-0.5 rounded-md text-[10px] uppercase font-bold text-indigo-400 border border-slate-700">${data.user.role}</span>
+          <span>👤 User: <strong class="text-indigo-300 font-semibold">${escapeHtml(data.user.username)}</strong></span>
+          <span class="bg-slate-800 px-2 py-0.5 rounded-md text-[10px] uppercase font-bold text-indigo-400 border border-slate-700">${escapeHtml(data.user.role)}</span>
         `;
 
         const userNav = document.getElementById('userNav');
@@ -247,8 +264,15 @@
         listbox.innerHTML = `<option value="">-- Daftar Channel (${channels.length}) --</option>`;
 
         channels.forEach(ch => {
-          listbox.innerHTML += `<option value="${ch.id}">📺 ${ch.title}</option>`;
-          channelSelect.innerHTML += `<option value="${ch.id}">${ch.title}</option>`;
+          const opt1 = document.createElement('option');
+          opt1.value = ch.id;
+          opt1.textContent = `📺 ${ch.title}`;
+          listbox.appendChild(opt1);
+
+          const opt2 = document.createElement('option');
+          opt2.value = ch.id;
+          opt2.textContent = ch.title;
+          channelSelect.appendChild(opt2);
         });
       } catch (err) {
         console.error("Gagal memuat daftar channel:", err);
@@ -373,18 +397,18 @@
 
         const queue = await res.json();
         const tbody = document.getElementById('queueTableBody');
-        tbody.innerHTML = '';
 
         // Reset check all & count button
         const selectAll = document.getElementById('selectAllCheckbox');
         if (selectAll) selectAll.checked = false;
-        window.updateSelectedCount();
 
         if (!queue || !Array.isArray(queue) || queue.length === 0) {
           tbody.innerHTML = `<tr><td colspan="9" class="p-6 text-center text-slate-400 font-normal">Belum ada video dalam antrean</td></tr>`;
+          window.updateSelectedCount();
           return;
         }
 
+        let rowsHtml = '';
         queue.forEach((item, index) => {
           let statusBadge = '';
           if (item.status === 'Pending') statusBadge = `<span class="bg-amber-50 text-amber-700 border border-amber-200/60 text-xs px-2.5 py-1 rounded-md font-semibold whitespace-nowrap">Pending</span>`;
@@ -394,31 +418,35 @@
 
           let info = '-';
           if (item.youtube_id) {
-            info = `<a href="https://youtu.be/${item.youtube_id}" target="_blank" class="text-indigo-600 hover:text-indigo-800 underline font-semibold whitespace-nowrap">Lihat Video</a>`;
+            info = `<a href="https://youtu.be/${escapeHtml(item.youtube_id)}" target="_blank" class="text-indigo-600 hover:text-indigo-800 underline font-semibold whitespace-nowrap">Lihat Video</a>`;
           } else if (item.error_message) {
-            info = `<span class="text-rose-600 text-xs font-normal">${item.error_message}</span>`;
+            info = `<span class="text-rose-600 text-xs font-normal">${escapeHtml(item.error_message)}</span>`;
           }
 
           let actionBtn = `<button onclick="window.deleteQueue(${item.id})" class="bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200/80 text-xs px-3 py-1.5 rounded-lg transition-all cursor-pointer font-semibold whitespace-nowrap active:scale-95">Hapus</button>`;
 
-          const displayDate = item.display_date || '-';
+          const displayDate = escapeHtml(item.display_date || '-');
+          const channelName = item.channel_name ? escapeHtml(item.channel_name) : '<span class="text-rose-500 font-normal">Tidak Ada Channel</span>';
 
-          tbody.innerHTML += `
+          rowsHtml += `
             <tr class="hover:bg-slate-50/80 transition-colors">
               <td class="p-3.5 sm:p-4 text-center">
                 <input type="checkbox" value="${item.id}" onchange="window.updateSelectedCount()" class="queue-item-checkbox w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 border-slate-300 cursor-pointer">
               </td>
               <td class="p-3.5 sm:p-4 text-slate-400 font-mono text-xs">${index + 1}</td>
-              <td class="p-3.5 sm:p-4 font-bold text-slate-800 whitespace-nowrap">${item.channel_name || '<span class="text-rose-500 font-normal">Tidak Ada Channel</span>'}</td>
-              <td class="p-3.5 sm:p-4 font-medium min-w-[150px] text-slate-900">${item.title}</td>
+              <td class="p-3.5 sm:p-4 font-bold text-slate-800 whitespace-nowrap">${channelName}</td>
+              <td class="p-3.5 sm:p-4 font-medium min-w-[150px] text-slate-900">${escapeHtml(item.title)}</td>
               <td class="p-3.5 sm:p-4 whitespace-nowrap text-slate-600">${displayDate}</td>
-              <td class="p-3.5 sm:p-4 capitalize whitespace-nowrap"><span class="bg-slate-100 text-slate-600 px-2 py-0.5 rounded text-xs font-medium">${item.privacy_status}</span></td>
+              <td class="p-3.5 sm:p-4 capitalize whitespace-nowrap"><span class="bg-slate-100 text-slate-600 px-2 py-0.5 rounded text-xs font-medium">${escapeHtml(item.privacy_status)}</span></td>
               <td class="p-3.5 sm:p-4">${statusBadge}</td>
               <td class="p-3.5 sm:p-4">${info}</td>
               <td class="p-3.5 sm:p-4">${actionBtn}</td>
             </tr>
           `;
         });
+
+        tbody.innerHTML = rowsHtml;
+        window.updateSelectedCount();
       } catch (err) {
         console.error("Gagal memuat antrean:", err);
       }
@@ -467,6 +495,7 @@
         if (xhr.status === 200) {
           alert('✅ Video berhasil dijadwalkan!');
           e.target.reset();
+          document.getElementById('fileNameDisplay').textContent = 'Pilih / Drag file video di sini';
           loadQueue();
         } else {
           let errMessage = 'Terjadi kesalahan pada server';
@@ -487,6 +516,7 @@
       xhr.send(formData);
     });
 
+    // Initializations
     checkUserSession();
     loadChannels();
     loadQueue();
