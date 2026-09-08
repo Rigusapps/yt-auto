@@ -132,6 +132,32 @@ async function removeCloudinaryFile(filePath) {
 }
 
 // --- AUTH ROUTES ---
+app.post('/api/reset-password', async (req, res) => {
+  try {
+    const { username, newPassword } = req.body;
+    if (!username || !newPassword) {
+      return res.status(400).json({ error: 'Username dan Password baru wajib diisi!' });
+    }
+
+    // Hash password baru menggunakan bcryptjs
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+    // Update ke database Turso
+    const result = await turso.execute({
+      sql: 'UPDATE users SET password = ? WHERE username = ?',
+      args: [hashedPassword, username]
+    });
+
+    if (result.rowsAffected === 0) {
+      return res.status(404).json({ error: 'Username tidak ditemukan.' });
+    }
+
+    res.json({ success: true, message: 'Password berhasil diubah!' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 
 app.post('/api/register', async (req, res) => {
   try {
