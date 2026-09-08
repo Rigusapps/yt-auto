@@ -485,7 +485,28 @@ app.post('/api/admin/approve/:id', requireAdmin, async (req, res) => {
   }
 });
 
-// [DITAMBAHKAN] Endpoint Reset Password khusus Admin (Berdasarkan ID User)
+// Endpoint Edit Email & WhatsApp User (Admin)
+app.put('/api/admin/users/:id', requireAdmin, async (req, res) => {
+  try {
+    const { email, whatsapp } = req.body;
+    const targetUserId = req.params.id;
+
+    if (!email || !whatsapp) {
+      return res.status(400).json({ error: 'Email dan nomor WhatsApp wajib diisi!' });
+    }
+
+    await turso.execute({
+      sql: 'UPDATE users SET email = ?, whatsapp = ? WHERE id = ?',
+      args: [email, whatsapp, targetUserId]
+    });
+
+    res.json({ success: true, message: 'Data pengguna berhasil diperbarui!' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Endpoint Reset Password khusus Admin (Berdasarkan ID User)
 app.post('/api/admin/reset-password/:id', requireAdmin, async (req, res) => {
   try {
     const { newPassword } = req.body;
