@@ -39,10 +39,13 @@ app.use(session({
 }));
 
 // Folder uploads lokal sementara sebelum terkirim ke Cloudinary
-if (!fs.existsSync('./uploads')) fs.mkdirSync('./uploads');
+const UPLOAD_DIR = path.join(__dirname, 'uploads');
+if (!fs.existsSync(UPLOAD_DIR)) {
+  fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+}
 
 const storage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, 'uploads/'),
+  destination: (req, file, cb) => cb(null, UPLOAD_DIR),
   filename: (req, file, cb) => cb(null, `${Date.now()}-${file.originalname}`)
 });
 
@@ -78,6 +81,17 @@ function requireAdmin(req, res, next) {
     return res.status(403).json({ error: 'Akses ditolak. Membutuhkan hak akses Admin.' });
   }
   next();
+}
+
+// Helper untuk hapus file lokal aman
+function safeUnlink(filePath) {
+  if (filePath && fs.existsSync(filePath)) {
+    try {
+      fs.unlinkSync(filePath);
+    } catch (e) {
+      console.error(`Gagal menghapus file lokal: ${filePath}`, e.message);
+    }
+  }
 }
 
 // --- FUNGSI FORMAT TANGGAL WIB TERPUSAT ---
@@ -126,12 +140,14 @@ async function removeCloudinaryFile(filePath) {
     } catch (e) {
       console.error("Gagal menghapus file Cloudinary:", e.message);
     }
-  } else if (fs.existsSync(filePath)) {
-    try { fs.unlinkSync(filePath); } catch (e) {}
+  } else {
+    safeUnlink(filePath);
   }
 }
 
 // --- AUTH ROUTES ---
+
+// Public Reset Password (oleh user sendiri via form reset)
 app.post('/api/reset-password', async (req, res) => {
   try {
     const { username, newPassword } = req.body;
@@ -139,10 +155,8 @@ app.post('/api/reset-password', async (req, res) => {
       return res.status(400).json({ error: 'Username dan Password baru wajib diisi!' });
     }
 
-    // Hash password baru menggunakan bcryptjs
     const hashedPassword = await bcrypt.hash(newPassword, 10);
 
-    // Update ke database Turso
     const result = await turso.execute({
       sql: 'UPDATE users SET password = ? WHERE username = ?',
       args: [hashedPassword, username]
@@ -157,7 +171,6 @@ app.post('/api/reset-password', async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
-
 
 app.post('/api/register', async (req, res) => {
   try {
@@ -291,6 +304,7 @@ const scheduleHandler = async (req, res) => {
       return res.status(400).json({ error: 'File video wajib diunggah!' });
     }
     if (!channel_id) {
+      safeUnlink(req.file.path);
       return res.status(400).json({ error: 'Pilih channel tujuan unggah!' });
     }
 
@@ -302,16 +316,12 @@ const scheduleHandler = async (req, res) => {
         folder: 'youtube-uploads'
       });
     } catch (cloudErr) {
-      if (fs.existsSync(req.file.path)) {
-        try { fs.unlinkSync(req.file.path); } catch (e) {}
-      }
+      safeUnlink(req.file.path);
       return res.status(500).json({ error: `Gagal upload ke Cloudinary: ${cloudErr.message}` });
     }
 
-    // Hapus file temporary di lokal server
-    if (fs.existsSync(req.file.path)) {
-      try { fs.unlinkSync(req.file.path); } catch (e) {}
-    }
+    // Hapus file temporary di lokal server setelah berhasil upload ke Cloudinary
+    safeUnlink(req.file.path);
 
     const videoPublicUrl = cloudResult.secure_url;
 
@@ -339,6 +349,7 @@ const scheduleHandler = async (req, res) => {
 
     res.json({ message: 'Video berhasil ditambahkan ke antrean (Tersimpan di Cloudinary Cloud)!' });
   } catch (err) {
+    if (req.file) safeUnlink(req.file.path);
     res.status(500).json({ error: err.message });
   }
 };
@@ -474,6 +485,33 @@ app.post('/api/admin/approve/:id', requireAdmin, async (req, res) => {
   }
 });
 
+// [DITAMBAHKAN] Endpoint Reset Password khusus Admin (Berdasarkan ID User)
+app.post('/api/admin/reset-password/:id', requireAdmin, async (req, res) => {
+  try {
+    const { newPassword } = req.body;
+    const targetUserId = req.params.id;
+
+    if (!newPassword || newPassword.trim() === '') {
+      return res.status(400).json({ error: 'Password baru tidak boleh kosong!' });
+    }
+
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+    const result = await turso.execute({
+      sql: 'UPDATE users SET password = ? WHERE id = ?',
+      args: [hashedPassword, targetUserId]
+    });
+
+    if (result.rowsAffected === 0) {
+      return res.status(404).json({ error: 'Pengguna tidak ditemukan.' });
+    }
+
+    res.json({ success: true, message: 'Password pengguna berhasil diperbarui!' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.delete('/api/admin/users/:id', requireAdmin, async (req, res) => {
   try {
     const targetUserId = req.params.id;
@@ -492,6 +530,8 @@ app.delete('/api/admin/users/:id', requireAdmin, async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+
+// --- SERVER INITIALIZATION ---
 
 initDb().then(() => {
   initScheduler();
