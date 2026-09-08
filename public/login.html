@@ -30,7 +30,7 @@
         <div>
           <div class="flex justify-between items-center mb-1">
             <label class="block text-xs font-semibold text-gray-700">Password</label>
-            <button type="button" onclick="openResetModal()" class="text-xs text-blue-600 hover:underline">Lupa Password?</button>
+            <button type="button" onclick="openResetModal()" class="text-xs text-blue-600 hover:underline font-semibold">Lupa Password?</button>
           </div>
           <input type="password" id="loginPassword" required class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm" placeholder="Masukkan password">
         </div>
@@ -64,16 +64,16 @@
     </div>
   </div>
 
-  <!-- MODAL RESET PASSWORD USER -->
+  <!-- MODAL PENGAJUAN RESET PASSWORD USER -->
   <div id="resetModal" class="fixed inset-0 bg-black/50 backdrop-blur-sm hidden flex justify-center items-center p-4 z-50">
     <div class="bg-white rounded-xl p-6 max-w-sm w-full shadow-xl relative">
-      <h3 class="text-lg font-bold text-gray-800 mb-1">Reset Password</h3>
-      <p class="text-xs text-gray-500 mb-4">Masukkan username dan password baru Anda.</p>
+      <h3 class="text-lg font-bold text-gray-800 mb-1">Pengajuan Reset Password</h3>
+      <p class="text-xs text-gray-500 mb-4">Masukkan username dan password baru yang Anda inginkan. Pengajuan ini memerlukan persetujuan Admin.</p>
 
-      <form id="resetForm" onsubmit="handleResetPassword(event)" class="space-y-3">
+      <form id="resetForm" onsubmit="handleRequestReset(event)" class="space-y-3">
         <div>
-          <label class="block text-xs font-semibold text-gray-700 mb-1">Username</label>
-          <input type="text" id="resetUsername" required class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm" placeholder="Username Anda">
+          <label class="block text-xs font-semibold text-gray-700 mb-1">Username Anda</label>
+          <input type="text" id="resetUsername" required class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm" placeholder="Username terdaftar">
         </div>
         <div>
           <label class="block text-xs font-semibold text-gray-700 mb-1">Password Baru</label>
@@ -85,7 +85,7 @@
             Batal
           </button>
           <button type="submit" class="px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg transition">
-            Simpan Password
+            Kirim Pengajuan
           </button>
         </div>
       </form>
@@ -93,10 +93,8 @@
   </div>
 
   <script>
-    // SESUAIKAN NOMOR WHATSAPP ADMIN DI SINI (Format: 628...)
     const ADMIN_WA_NUMBER = "6281234567890";
 
-    // Pindah Tampilan Tab Login / Register
     function switchTab(tab) {
       const loginForm = document.getElementById('loginForm');
       const registerForm = document.getElementById('registerForm');
@@ -116,7 +114,6 @@
       }
     }
 
-    // Process Login
     async function handleLogin(e) {
       e.preventDefault();
       const username = document.getElementById('loginUsername').value.trim();
@@ -138,7 +135,6 @@
       }
     }
 
-    // Process Register
     async function handleRegister(e) {
       e.preventDefault();
       const username = document.getElementById('regUsername').value.trim();
@@ -156,7 +152,6 @@
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'Gagal mendaftar');
 
-        // Teks otomatis untuk dikirim ke WA Admin
         const textMessage = encodeURIComponent(
           `Halo Admin, saya telah mendaftar akun baru di YT Scheduler.\n\n` +
           `*Detail Akun:*\n` +
@@ -174,7 +169,6 @@
       }
     }
 
-    // Modal Reset Password Functionality
     function openResetModal() {
       document.getElementById('resetModal').classList.remove('hidden');
     }
@@ -183,29 +177,39 @@
       document.getElementById('resetModal').classList.add('hidden');
     }
 
-    async function handleResetPassword(e) {
+    // User Mengajukan Reset Password
+    async function handleRequestReset(e) {
       e.preventDefault();
       const username = document.getElementById('resetUsername').value.trim();
       const newPassword = document.getElementById('resetNewPassword').value;
 
       try {
-        const res = await fetch('/api/reset-password', {
+        const res = await fetch('/api/request-reset-password', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ username, newPassword })
         });
 
         const data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'Gagal mereset password');
+        if (!res.ok) throw new Error(data.error || 'Gagal mengajukan reset password');
 
-        alert(data.message);
+        // Pesan WA untuk memberi tahu admin ada pengajuan reset
+        const textMessage = encodeURIComponent(
+          `Halo Admin, saya mengajukan reset password untuk akun YT Scheduler.\n\n` +
+          `*Username:* ${username}\n\n` +
+          `Mohon acc/approve persetujuan reset password saya di dashboard admin. Terima kasih!`
+        );
+
+        const waUrl = `https://wa.me/${ADMIN_WA_NUMBER}?text=${textMessage}`;
+        
         closeResetModal();
+        showWaConfirmationModal("Pengajuan reset password berhasil dikirim! Silakan konfirmasi ke Admin untuk persetujuan.", waUrl);
+
       } catch (err) {
         alert(err.message);
       }
     }
 
-    // Pop-up Tombol Konfirmasi WA
     function showWaConfirmationModal(serverMsg, waUrl) {
       const container = document.createElement('div');
       container.className = 'fixed inset-0 bg-black/50 backdrop-blur-sm flex justify-center items-center p-4 z-50';
@@ -214,15 +218,15 @@
           <div class="w-12 h-12 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-4 text-2xl">
             <i class="fa-brands fa-whatsapp"></i>
           </div>
-          <h3 class="text-lg font-bold text-gray-800 mb-2">Pendaftaran Berhasil!</h3>
+          <h3 class="text-lg font-bold text-gray-800 mb-2">Instruksi Lanjutan</h3>
           <p class="text-xs text-gray-600 mb-6">${serverMsg}</p>
           
           <div class="space-y-2">
             <a href="${waUrl}" target="_blank" class="w-full block py-2.5 px-4 bg-green-600 hover:bg-green-700 text-white font-semibold text-xs rounded-lg transition">
-              <i class="fa-brands fa-whatsapp mr-1"></i> Konfirmasi ke WA Admin
+              <i class="fa-brands fa-whatsapp mr-1"></i> Hubungi WA Admin
             </a>
             <button onclick="this.closest('.fixed').remove(); switchTab('login');" class="w-full py-2 px-4 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold text-xs rounded-lg transition">
-              Tutup & Ke Login
+              Tutup & Kembali
             </button>
           </div>
         </div>
