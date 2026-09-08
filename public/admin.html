@@ -24,7 +24,7 @@
           <span class="bg-purple-100 text-purple-700 text-xs px-2.5 py-1 rounded-md font-bold uppercase tracking-wide border border-purple-200">Admin Control</span>
           <h1 class="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">Panel Kelola & Monitor</h1>
         </div>
-        <p class="text-xs sm:text-sm text-slate-500">Konfirmasi akun, kelola hak akses pengguna, serta pantau seluruh antrean sistem secara penuh.</p>
+        <p class="text-xs sm:text-sm text-slate-500">Konfirmasi akun, kelola hak akses pengguna, reset password, serta pantau seluruh antrean sistem secara penuh.</p>
       </div>
       <a href="/" class="self-start sm:self-auto bg-slate-800 hover:bg-slate-900 text-white text-xs sm:text-sm px-4 py-2.5 rounded-xl font-semibold transition-all duration-200 shadow-sm flex items-center gap-2 whitespace-nowrap active:scale-95">
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/></svg>
@@ -184,6 +184,8 @@
             }
           }
 
+          let resetBtn = `<button onclick="adminResetPassword(${u.id}, '${u.username}')" class="bg-blue-50 hover:bg-blue-100 text-blue-600 border border-blue-200/80 text-xs px-2.5 py-1 rounded-lg transition-all cursor-pointer font-semibold ml-1 whitespace-nowrap active:scale-95">Reset Pass</button>`;
+
           let deleteBtn = u.role !== 'admin' 
             ? `<button onclick="deleteUser(${u.id})" class="bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200/80 text-xs px-2.5 py-1 rounded-lg transition-all cursor-pointer font-semibold ml-1 whitespace-nowrap active:scale-95">Hapus</button>` 
             : '';
@@ -200,12 +202,34 @@
               <td class="p-3.5 sm:p-4">${waLink}</td>
               <td class="p-3.5 sm:p-4 whitespace-nowrap"><span class="px-2 py-0.5 bg-indigo-50 text-indigo-700 rounded-md text-xs uppercase font-semibold border border-indigo-100">${u.role}</span></td>
               <td class="p-3.5 sm:p-4">${statusBadge}</td>
-              <td class="p-3.5 sm:p-4 flex items-center whitespace-nowrap">${approvalBtn} ${deleteBtn}</td>
+              <td class="p-3.5 sm:p-4 flex items-center whitespace-nowrap">${approvalBtn} ${resetBtn} ${deleteBtn}</td>
             </tr>
           `;
         });
       } catch (err) {
         console.error("Gagal memuat pengguna:", err);
+      }
+    }
+
+    async function adminResetPassword(id, username) {
+      const newPassword = prompt(`Masukkan password baru untuk user "${username}":`);
+      if (!newPassword || newPassword.trim() === '') return;
+
+      try {
+        const res = await fetch(`/api/admin/reset-password/${id}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ newPassword })
+        });
+
+        const data = await res.json();
+        if (res.ok) {
+          alert(`Password untuk user "${username}" berhasil diubah!`);
+        } else {
+          alert('Gagal mereset password: ' + (data.error || 'Terjadi kesalahan'));
+        }
+      } catch (err) {
+        alert('Terjadi kesalahan: ' + err.message);
       }
     }
 
